@@ -1,0 +1,87 @@
+// ─── MEMORY.JS — All Supabase interactions ───────────────────────────────────
+
+const SUPABASE_URL = 'https://jbsocnomwxodqyhiukcl.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impic29jbm9td3hvZHF5aGl1a2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjQ5NTUsImV4cCI6MjA5Mzg0MDk1NX0.ehX6AEqpSpVAF9Q3UxIabZXdZKLDqKKP9KL3pDIPhHE';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+window.db = db;
+
+// ─── DAVID PROFILE ───────────────────────────────────────────────────────────
+
+let davidProfile = null;
+
+async function loadDavidProfile() {
+  try {
+    const result = await db.from('David').select('*').limit(1).single();
+    if (result.data) davidProfile = result.data;
+  } catch(e) { davidProfile = null; }
+}
+
+async function updateDavidProfile(sessionSummary) {
+  if (!davidProfile) return;
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: `You are a background observer. You have David's current profile and a session summary. Determine if the session revealed anything NEW about David. If yes, return a JSON object with only the fields that should change. If no update needed, return {}. Current profile: ${JSON.stringify(davidProfile)} Respond with ONLY valid JSON.`,
+        messages: [{ role: 'user', content: `Session summary: ${sessionSummary}` }]
+      })
+    });
+    const data = await response.json();
+    if (data.content && data.content[0]) {
+      const updates = JSON.parse(data.content[0].text.trim());
+      if (Object.keys(updates).length > 0) {
+        updates.last_updated = new Date().toISOString();
+        await db.from('David').update(updates).eq('id', davidProfile.id);
+        Object.assign(davidProfile, updates);
+      }
+    }
+  } catch(e) {}
+}
+
+// ─── THREADS ─────────────────────────────────────────────────────────────────
+
+async function fetchAllThreads() {
+  const result = await db.from('Threads').select('*');
+  return result.data || [];
+}
+
+async function fetchThread(id) {
+  const result = await db.from('Threads').select('*').eq('id', id).single();
+  return result.data || null;
+}
+
+async function updateThread(id, updates) {
+  return await db.from('Threads').update(updates).eq('id', id);
+}
+
+async function insertThread(data) {
+  return await db.from('Threads').insert([data]).select().single();
+}
+
+async function deleteThreadById(id) {
+  return await db.from('Threads').delete().eq('id', id);
+}
+
+// ─── IDEAS ────────────────────────────────────────────────────────────────────
+
+async function fetchIdeas(threadId) {
+  const result = await db.from('Ideas').select('*').eq('thread_id', threadId);
+  return result.data || [];
+}
+
+async function insertIdea(threadId, text) {
+  return await db.from('Ideas').insert([{ thread_id: threadId, idea_text: text }]);
+}
+
+// ─── PROGRESS ────────────────────────────────────────────────────────────────
+
+async function appendProgress(thread, summary, label) {
+  const tag = label || 'Session';
+  const newProgress = (thread['Current progress'] || '') +
+    '\n\n[' + tag + ' ' + new Date().toLocaleDateString() + ']\n' + summary;
+  await updateThread(thread.id, { 'Current progress': newProgress });
+  return newProgress;
+}
