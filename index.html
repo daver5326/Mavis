@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mavis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <div class="top-bar">
+      <div class="app-title">Mavis</div>
+      <button id="new-thread-btn" class="icon-btn">+</button>
+    </div>
+    <div id="dashboard-messages"></div>
+    <div id="thread-list"></div>
+    <div class="input-row">
+      <textarea id="dashboard-input" placeholder="Talk to Mavis..."></textarea>
+      <button id="dashboard-send" class="send-btn">↑</button>
+      <button id="mic-btn" class="mic-btn">🎤</button>
+    </div>
+  </div>
+
+  <!-- Thread View -->
+  <div id="thread-view" style="display:none;">
+    <div class="top-bar">
+      <button onclick="backToDashboard()" class="back-btn">←</button>
+      <div id="thread-title" class="thread-title-text"></div>
+      <button onclick="openEditThread()" class="icon-btn">⋯</button>
+    </div>
+    <div id="board-content"></div>
+    <div id="chat-messages"></div>
+    <div class="input-row">
+      <textarea id="chat-input" placeholder="Ask Mavis..."></textarea>
+      <button id="send-btn" class="send-btn">↑</button>
+    </div>
+  </div>
+
+  <!-- New Thread Form -->
+  <div id="new-thread-view" style="display:none;">
+    <div class="top-bar">
+      <button onclick="closeNewThreadForm()" class="back-btn">←</button>
+      <div class="app-title">New Thread</div>
+    </div>
+    <div class="form-body">
+      <input id="nt-name" placeholder="Thread name" class="form-input">
+      <textarea id="nt-goal" placeholder="Goal" class="form-input"></textarea>
+      <input id="nt-nextstep" placeholder="Next step" class="form-input">
+      <input id="nt-decisions" placeholder="Decisions made" class="form-input">
+      <input id="nt-questions" placeholder="Open questions" class="form-input">
+      <input id="nt-notes" placeholder="Notes" class="form-input">
+      <select id="nt-platform" class="form-input">
+        <option value="Mavis">Mavis</option>
+        <option value="Claude">Claude</option>
+        <option value="Other">Other</option>
+      </select>
+      <button onclick="saveNewThread()" class="primary-btn">Create Thread</button>
+    </div>
+  </div>
+
+  <!-- Edit Thread Form -->
+  <div id="edit-thread-view" style="display:none;">
+    <div class="top-bar">
+      <button onclick="closeEditThread()" class="back-btn">←</button>
+      <div class="app-title">Edit Thread</div>
+    </div>
+    <div class="form-body">
+      <input id="et-name" placeholder="Thread name" class="form-input">
+      <select id="et-status" class="form-input">
+        <option value="Active">Active</option>
+        <option value="Paused">Paused</option>
+        <option value="Complete">Complete</option>
+      </select>
+      <textarea id="et-goal" placeholder="Goal" class="form-input"></textarea>
+      <textarea id="et-progress" placeholder="Current progress" class="form-input"></textarea>
+      <input id="et-nextstep" placeholder="Next step" class="form-input">
+      <input id="et-decisions" placeholder="Decisions made" class="form-input">
+      <input id="et-questions" placeholder="Open questions" class="form-input">
+      <input id="et-notes" placeholder="Notes" class="form-input">
+      <button onclick="saveEditThread()" class="primary-btn">Save</button>
+      <button onclick="deleteThread()" class="danger-btn">Delete Thread</button>
+    </div>
+  </div>
+
+  <!-- Card Overlay -->
+  <div id="card-overlay">
+    <div class="overlay-content">
+      <button onclick="closeCardDetail()" class="close-btn">✕</button>
+      <div id="ov-zone" class="ov-zone"></div>
+      <div id="ov-title" class="ov-title"></div>
+      <div id="ov-body" class="ov-body"></div>
+      <div class="ov-label">Why it matters</div>
+      <div id="ov-why" class="ov-detail"></div>
+      <div class="ov-label">Next</div>
+      <div id="ov-next" class="ov-detail"></div>
+    </div>
+  </div>
+
+  <!-- Modules -->
+  <script src="core/memory.js"></script>
+  <script src="core/context.js"></script>
+  <script src="core/router.js"></script>
+  <script src="core/voice.js"></script>
+  <script src="ui/board.js"></script>
+  <script src="ui/dashboard.js"></script>
+  <script src="ui/thread.js"></script>
+  <script src="departments/chat.js"></script>
+  <script src="departments/projects.js"></script>
+  <script src="departments/builder.js"></script>
+  <script src="departments/self-modify.js"></script>
+  <script src="factory/registry.js"></script>
+  <script src="factory/foreman.js"></script>
+  <script src="main.js"></script>
+
+</body>
+</html>
