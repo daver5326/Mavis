@@ -19,6 +19,17 @@ const INTENTS = {
     'new project', 'new app', 'new repo', 'create a project', 'create an app',
     'start a project', 'start an app', 'launch a project', 'launch an app',
     'scaffold', 'new external'
+  ],
+  agentRead: [
+    'read your', 'show me your', 'look at your', 'open your', 'check your',
+    'what is in your', "what's in your", 'read the file', 'show me the file',
+    'use your agent to read', 'agent read'
+  ],
+  agentWrite: [
+    'use your agent to', 'agent write', 'agent update', 'agent fix',
+    'update the file', 'write to', 'commit this', 'push this change',
+    'strengthen', 'improve the instruction', 'fix the instruction',
+    'change the instruction', 'update the instruction'
   ]
 };
 
@@ -53,6 +64,36 @@ Rules:
 - If it's a new topic that deserves its own thread, return JSON: {"route": false, "suggest_new": true, "suggested_name": "<short thread name>", "reason": "one short sentence why"}
 - If it's just casual chat or a question, return JSON: {"route": false, "suggest_new": false}
 Respond with ONLY valid JSON.`,
+        messages: [{ role: 'user', content: text }]
+      })
+    });
+    const data = await response.json();
+    if (data.content && data.content[0]) {
+      const raw = data.content[0].text.trim().replace(/```json|```/g, '');
+      return JSON.parse(raw);
+    }
+  } catch(e) {}
+  return null;
+}
+
+// ── Agent action planner — asks Claude what file to touch and how ─────────────
+async function planAgentAction(text, repoMap) {
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: `You are Mavis's agent planner. David wants to modify a file in the Mavis codebase.
+
+Repo structure:
+${JSON.stringify(repoMap, null, 2)}
+
+Return ONLY valid JSON:
+{
+  "file": "<path to file, e.g. core/context.js>",
+  "instruction": "<exactly what to change and how>",
+  "reason": "<one sentence why>"
+}`,
         messages: [{ role: 'user', content: text }]
       })
     });
