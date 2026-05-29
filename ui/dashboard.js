@@ -150,6 +150,8 @@ function dismissRoute() {
 
 async function greetOnLoad() {
   try {
+    window._livingDocSummary = await loadLivingDocumentSummary();
+
     const threads = await fetchAllThreads();
     const active = threads.filter(t => t['Status'] === 'Active' && t['thread_type'] !== 'feature' && !isInTriage(t));
     if (active.length === 0) return;
