@@ -17,10 +17,10 @@ async function sendMessage(inputId) {
     if (intent === 'selfModify') { handleSelfModifyRequest(text); return; }
     if (intent === 'newProject') { handleNewProjectRequest(text); return; }
     if (intent === 'build') { handleBuildRequest(text); return; }
+    if (intent === 'agentWrite') { handleAgentWrite(text); return; }
 
     const threads = await fetchAllThreads();
 
-    // ── Wire agent repo map into context ──────────────────────────────────
     let repoMap = null;
     try {
       repoMap = await agent.mapRepo();
@@ -106,6 +106,87 @@ async function sendMessage(inputId) {
   } catch(e) {
     thinking.remove();
     addMessage('assistant', 'Error: ' + e.message);
+  }
+}
+
+// ── Agent write handler — plan, propose, approve, commit ──────────────────────
+async function handleAgentWrite(text) {
+  const msgContainer = document.getElementById('dashboard-messages');
+
+  const status = document.createElement('div');
+  status.className = 'message assistant';
+  status.textContent = 'Reading codebase...';
+  msgContainer.appendChild(status);
+  msgContainer.scrollTop = 999999;
+
+  try {
+    // Step 1: Map the repo
+    const repoMap = await agent.mapRepo();
+
+    // Step 2: Ask Claude what file to change and how
+    status.textContent = 'Planning change...';
+    const plan = await planAgentAction(text, repoMap);
+    if (!plan || !plan.file) throw new Error('Could not determine what to change.');
+
+    // Step 3: Read the current file
+    status.textContent = `Reading ${plan.file}...`;
+    const current = await agent.readFile(plan.file);
+
+    // Step 4: Ask Claude to produce the new file content
+    const writeResponse = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: `You are Mavis's agent. You are given a file and an instruction. Return ONLY the complete updated file content, nothing else. No explanation, no markdown, no code fences.`,
+        messages: [{
+          role: 'user',
+          content: `File: ${plan.file}\n\nInstruction: ${plan.instruction}\n\nCurrent content:\n${current.content}`
+        }]
+      })
+    });
+    const writeData = await writeResponse.json();
+    const newContent = writeData.content[0].text;
+
+    // Step 5: Show proposal and ask for approval
+    status.remove();
+    const proposal = document.createElement('div');
+    proposal.className = 'message assistant';
+    proposal.innerHTML = `
+      <div style="margin-bottom:8px">Proposed change to <strong>${plan.file}</strong>:</div>
+      <div style="font-size:12px;opacity:0.7;margin-bottom:12px">${plan.reason}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="confirmAgentWrite('${plan.file}', this)" 
+          data-content="${encodeURIComponent(newContent)}"
+          data-sha="${current.sha}"
+          style="background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
+          Approve & Commit
+        </button>
+        <button onclick="this.closest('.message').remove()"
+          style="background:#333;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
+          Reject
+        </button>
+      </div>`;
+    msgContainer.appendChild(proposal);
+    msgContainer.scrollTop = 999999;
+
+  } catch(e) {
+    status.textContent = 'Agent error: ' + e.message;
+  }
+}
+
+async function confirmAgentWrite(filePath, btn) {
+  const content = decodeURIComponent(btn.dataset.content);
+  const sha = btn.dataset.sha;
+  const msgEl = btn.closest('.message');
+
+  btn.textContent = 'Committing...';
+  btn.disabled = true;
+
+  try {
+    await agent.writeFile(filePath, content, `Agent: update ${filePath}`, sha);
+    msgEl.innerHTML = `Committed. ${filePath} updated successfully.`;
+  } catch(e) {
+    msgEl.innerHTML = `Commit failed: ${e.message}`;
   }
 }
 
