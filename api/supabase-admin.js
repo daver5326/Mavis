@@ -15,15 +15,14 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   }
 });
 
-export async function executeSQL(query, params = []) {
+export async function executeSQL(sqlString) {
   try {
-    if (!query || typeof query !== 'string') {
-      throw new Error('Invalid query parameter');
+    if (!sqlString || typeof sqlString !== 'string') {
+      throw new Error('Invalid SQL string parameter');
     }
 
     const { data, error } = await supabaseAdmin.rpc('exec_sql', {
-      sql_query: query,
-      sql_params: params
+      sql_query: sqlString
     });
 
     if (error) {
@@ -255,29 +254,8 @@ export async function createTable(tableName, schema) {
 }
 
 export async function createMavisConfigTable() {
-  try {
-    const createTableQuery = `
-      CREATE TABLE IF NOT EXISTS mavis_config (
-        id SERIAL PRIMARY KEY,
-        key TEXT UNIQUE NOT NULL,
-        value TEXT,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `;
-
-    const { data, error } = await supabaseAdmin.rpc('exec_sql', {
-      sql_query: createTableQuery
-    });
-
-    if (error) {
-      throw error;
-    }
-
-    return { data: { success: true, tableName: 'mavis_config' }, error: null };
-  } catch (error) {
-    console.error('Error creating mavis_config table:', error);
-    return { data: null, error: error.message };
-  }
+  const sql = 'CREATE TABLE IF NOT EXISTS mavis_config (id serial primary key, key text unique, value text, updated_at timestamptz default now())';
+  return await executeSQL(sql);
 }
 
 async function initializeDatabase() {
