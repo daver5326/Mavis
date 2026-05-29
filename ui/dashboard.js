@@ -156,7 +156,9 @@ async function greetOnLoad() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const suggested = active.find(t => t['Next step']) || active[0];
-  systemContext = buildMasterContext(threads);
+  const recentSessions = await loadRecentSessions(3);
+systemContext = buildMasterContext(threads, recentSessions);
+
   chatHistory = [];
 
   const prompt = `${greeting} David. Brief, natural, personal greeting. ${active.length} active projects. Suggest one thing to work on based on: "${suggested['Thread name']}" — next step: "${suggested['Next step'] || 'no next step set'}". 2-3 sentences max. Direct and energetic.`;
@@ -173,6 +175,9 @@ async function greetOnLoad() {
       showDashboardMessage('assistant', msg);
       speak(msg);
       chatHistory.push({ role: 'assistant', content: msg });
+window._sessionStartTime = new Date().toISOString();
+window._sessionLog = [];
+
     }
   } catch(e) {}
 }
