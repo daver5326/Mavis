@@ -258,8 +258,30 @@ export async function createMavisConfigTable() {
   return await executeSQL(sql);
 }
 
+export async function insertLivingDocumentConfig() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('mavis_config')
+      .insert({
+        key: 'living_document',
+        value: 'placeholder — to be updated with full living document content'
+      })
+      .select();
+
+    if (error) {
+      throw error;
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error inserting living document config:', error);
+    return { data: null, error: error.message };
+  }
+}
+
 async function initializeDatabase() {
   await createMavisConfigTable();
+  await insertLivingDocumentConfig();
 }
 
 initializeDatabase().catch(console.error);
