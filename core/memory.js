@@ -110,3 +110,33 @@ async function loadRecentSessions(limit = 3) {
     return result.data || [];
   } catch(e) { return []; }
 }
+
+// ─── LIVING DOCUMENT ─────────────────────────────────────────────────────────
+
+async function loadLivingDocumentSummary() {
+  try {
+    const result = await db
+      .from('mavis_config')
+      .select('value')
+      .eq('key', 'living_document_summary')
+      .single();
+    return result.data?.value || null;
+  } catch(e) {
+    console.error('loadLivingDocumentSummary error:', e);
+    return null;
+  }
+}
+
+async function loadLivingDocument() {
+  try {
+    const result = await db
+      .from('mavis_config')
+      .select('value')
+      .eq('key', 'living_document')
+      .single();
+    return result.data?.value || null;
+  } catch(e) {
+    console.error('loadLivingDocument error:', e);
+    return null;
+  }
+}
