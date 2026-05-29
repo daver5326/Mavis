@@ -11,6 +11,8 @@ async function sendMessage(inputId) {
 
   if (currentView === 'dashboard') {
     showDashboardMessage('user', text);
+    showDashboardMessage('user', text);
+if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
     if (intent === 'update') { handleThreadUpdate(text); return; }
     if (intent === 'selfModify') { handleSelfModifyRequest(text); return; }
@@ -46,7 +48,8 @@ async function sendMessage(inputId) {
       if (data.content && data.content[0]) {
         const reply = data.content[0].text;
         showDashboardMessage('assistant', reply);
-        chatHistory.push({ role: 'assistant', content: reply });
+if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
+chatHistory.push({ role: 'assistant', content: reply });
         speak(reply);
       }
 
