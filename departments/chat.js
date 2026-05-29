@@ -7,25 +7,40 @@ async function sendMessage(inputId) {
   if (!text) return;
   input.value = '';
 
-  const intent = detectIntent(text);
-
   if (currentView === 'dashboard') {
     showDashboardMessage('user', text);
     if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
-    if (intent === 'update') { handleThreadUpdate(text); return; }
-    if (intent === 'selfModify') { handleSelfModifyRequest(text); return; }
-    if (intent === 'newProject') { handleNewProjectRequest(text); return; }
-    if (intent === 'agentWrite') { handleAgentWrite(text); return; }
+    // ── LLM intent classification ─────────────────────────────────────────
+    const intentResponse = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: `You are Mavis's intent classifier. Classify David's input into exactly one of these intents:
+- "agentAction": any request to read, write, create, update, fix, or modify a file or codebase
+- "threadUpdate": filing information into a project thread
+- "newProject": starting a brand new external project or repo
+- "chat": everything else
 
-    const threads = await fetchAllThreads();
-
-    let repoMap = null;
+Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one sentence>"}`,
+        messages: [{ role: 'user', content: text }]
+      })
+    });
+    const intentData = await intentResponse.json();
+    let intent = 'chat';
     try {
-      repoMap = await agent.mapRepo();
-    } catch(e) {
-      console.warn('Agent repo map failed:', e.message);
-    }
+      const parsed = JSON.parse(intentData.content[0].text.trim().replace(/```json|```/g, ''));
+      intent = parsed.intent;
+    } catch(e) {}
+
+    if (intent === 'threadUpdate') { handleThreadUpdate(text); return; }
+    if (intent === 'newProject') { handleNewProjectRequest(text); return; }
+    if (intent === 'agentAction') { handleAgentWrite(text); return; }
+
+    // ── Regular chat ──────────────────────────────────────────────────────
+    const threads = await fetchAllThreads();
+    let repoMap = null;
+    try { repoMap = await agent.mapRepo(); } catch(e) {}
 
     systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
     chatHistory.push({ role: 'user', content: text });
@@ -76,9 +91,6 @@ async function sendMessage(inputId) {
   }
 
   // Thread view
-  if (intent === 'selfModify') { addMessage('user', text); handleSelfModifyRequest(text); return; }
-  if (intent === 'newProject') { addMessage('user', text); handleNewProjectRequest(text); return; }
-
   addMessage('user', text);
   chatHistory.push({ role: 'user', content: text });
 
@@ -107,7 +119,6 @@ async function sendMessage(inputId) {
   }
 }
 
-// ── Agent write handler — plan, propose, approve, commit ──────────────────────
 async function handleAgentWrite(text) {
   const msgContainer = document.getElementById('dashboard-messages');
 
@@ -125,16 +136,21 @@ async function handleAgentWrite(text) {
     if (!plan || !plan.file) throw new Error('Could not determine what to change.');
 
     status.textContent = `Reading ${plan.file}...`;
-    const current = await agent.readFile(plan.file);
+    let current = null;
+    try {
+      current = await agent.readFile(plan.file);
+    } catch(e) {
+      current = null;
+    }
 
     const writeResponse = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system: `You are Mavis's agent. You are given a file and an instruction. Return ONLY the complete updated file content, nothing else. No explanation, no markdown, no code fences.`,
+        system: `You are Mavis's agent. You are given a file and an instruction. Return ONLY the complete file content, nothing else. No explanation, no markdown, no code fences.`,
         messages: [{
           role: 'user',
-          content: `File: ${plan.file}\n\nInstruction: ${plan.instruction}\n\nCurrent content:\n${current.content}`
+          content: `File: ${plan.file}\n\nInstruction: ${plan.instruction}\n\n${current ? 'Current content:\n' + current.content : 'This is a new file — create it from scratch.'}`
         }]
       })
     });
@@ -145,12 +161,12 @@ async function handleAgentWrite(text) {
     const proposal = document.createElement('div');
     proposal.className = 'message assistant';
     proposal.innerHTML = `
-      <div style="margin-bottom:8px">Proposed change to <strong>${plan.file}</strong>:</div>
+      <div style="margin-bottom:8px">${current ? 'Proposed change to' : 'Proposed new file'} <strong>${plan.file}</strong>:</div>
       <div style="font-size:12px;opacity:0.7;margin-bottom:12px">${plan.reason}</div>
       <div style="display:flex;gap:8px">
         <button onclick="confirmAgentWrite('${plan.file}', this)"
           data-content="${encodeURIComponent(newContent)}"
-          data-sha="${current.sha}"
+          data-sha="${current ? current.sha : ''}"
           style="background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
           Approve & Commit
         </button>
@@ -169,7 +185,7 @@ async function handleAgentWrite(text) {
 
 async function confirmAgentWrite(filePath, btn) {
   const content = decodeURIComponent(btn.dataset.content);
-  const sha = btn.dataset.sha;
+  const sha = btn.dataset.sha || null;
   const msgEl = btn.closest('.message');
 
   btn.textContent = 'Committing...';
