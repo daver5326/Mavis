@@ -1,4 +1,7 @@
+```javascript
 // ─── AGENT.JS — Agentic builder. Reads, writes, rolls back. ───────────────────
+
+import { supabaseQuery, supabaseExec } from '../api/supabase-admin.js';
 
 const agent = {
 
@@ -88,6 +91,17 @@ const agent = {
       targetDate: target.date,
       warning: `This will revert to: "${target.message}" — confirm to proceed`
     };
+  },
+
+  // ── Query Supabase (SELECT queries) ────────────────────────────────────────
+  async supabaseQuery(query, params) {
+    return await supabaseQuery(query, params);
+  },
+
+  // ── Execute Supabase (INSERT/UPDATE/DELETE) ────────────────────────────────
+  async supabaseExec(query, params) {
+    return await supabaseExec(query, params);
   }
 
 };
+```
