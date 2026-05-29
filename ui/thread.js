@@ -42,6 +42,7 @@ function addMessage(role, text) {
   messagesEl.appendChild(div);
   messagesEl.scrollTop = 999999;
   if (role !== 'assistant' || chatHistory.length === 0) chatHistory.push({ role, content: text });
+  if (window._sessionLog) window._sessionLog.push({ role, content: text });
   if (role === 'assistant' && text !== '...') speak(text);
 }
 
