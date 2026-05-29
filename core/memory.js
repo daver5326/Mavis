@@ -90,30 +90,13 @@ async function appendProgress(thread, summary, label) {
 
 async function saveSession(rawLog) {
   try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system: `You are a background observer analyzing a conversation between David and Mavis. Extract and return ONLY valid JSON with these fields:
-- summary: 2-3 sentence summary of what was discussed
-- key_decisions: any decisions made, as a single string
-- patterns_observed: anything notable about how David thinks or works
-- project_tags: array of project names mentioned (e.g. ["Mavis","Ripple"])
-No preamble. No markdown. Just JSON.`,
-        messages: [{ role: 'user', content: `Conversation log:\n${rawLog}` }]
-      })
-    });
-    const data = await response.json();
-    if (data.content && data.content[0]) {
-      const parsed = JSON.parse(data.content[0].text.trim());
-      await db.from('sessions').insert([{
-        raw_log: rawLog,
-        summary: parsed.summary,
-        key_decisions: parsed.key_decisions,
-        patterns_observed: parsed.patterns_observed,
-        project_tags: parsed.project_tags
-      }]);
-    }
+    await db.from('sessions').insert([{
+      raw_log: rawLog,
+      summary: rawLog.slice(0, 500),
+      key_decisions: '',
+      patterns_observed: '',
+      project_tags: []
+    }]);
   } catch(e) { console.error('saveSession error:', e); }
 }
 
