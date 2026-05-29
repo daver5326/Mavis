@@ -254,5 +254,37 @@ export async function createTable(tableName, schema) {
   }
 }
 
+export async function createMavisConfigTable() {
+  try {
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS mavis_config (
+        id SERIAL PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `;
+
+    const { data, error } = await supabaseAdmin.rpc('exec_sql', {
+      sql_query: createTableQuery
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return { data: { success: true, tableName: 'mavis_config' }, error: null };
+  } catch (error) {
+    console.error('Error creating mavis_config table:', error);
+    return { data: null, error: error.message };
+  }
+}
+
+async function initializeDatabase() {
+  await createMavisConfigTable();
+}
+
+initializeDatabase().catch(console.error);
+
 export default supabaseAdmin;
 ```
