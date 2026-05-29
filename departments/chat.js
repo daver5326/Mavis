@@ -16,7 +16,6 @@ async function sendMessage(inputId) {
     if (intent === 'update') { handleThreadUpdate(text); return; }
     if (intent === 'selfModify') { handleSelfModifyRequest(text); return; }
     if (intent === 'newProject') { handleNewProjectRequest(text); return; }
-    if (intent === 'build') { handleBuildRequest(text); return; }
     if (intent === 'agentWrite') { handleAgentWrite(text); return; }
 
     const threads = await fetchAllThreads();
@@ -79,7 +78,6 @@ async function sendMessage(inputId) {
   // Thread view
   if (intent === 'selfModify') { addMessage('user', text); handleSelfModifyRequest(text); return; }
   if (intent === 'newProject') { addMessage('user', text); handleNewProjectRequest(text); return; }
-  if (intent === 'build') { addMessage('user', text); handleBuildRequest(text); return; }
 
   addMessage('user', text);
   chatHistory.push({ role: 'user', content: text });
@@ -120,19 +118,15 @@ async function handleAgentWrite(text) {
   msgContainer.scrollTop = 999999;
 
   try {
-    // Step 1: Map the repo
     const repoMap = await agent.mapRepo();
 
-    // Step 2: Ask Claude what file to change and how
     status.textContent = 'Planning change...';
     const plan = await planAgentAction(text, repoMap);
     if (!plan || !plan.file) throw new Error('Could not determine what to change.');
 
-    // Step 3: Read the current file
     status.textContent = `Reading ${plan.file}...`;
     const current = await agent.readFile(plan.file);
 
-    // Step 4: Ask Claude to produce the new file content
     const writeResponse = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -147,7 +141,6 @@ async function handleAgentWrite(text) {
     const writeData = await writeResponse.json();
     const newContent = writeData.content[0].text;
 
-    // Step 5: Show proposal and ask for approval
     status.remove();
     const proposal = document.createElement('div');
     proposal.className = 'message assistant';
@@ -155,7 +148,7 @@ async function handleAgentWrite(text) {
       <div style="margin-bottom:8px">Proposed change to <strong>${plan.file}</strong>:</div>
       <div style="font-size:12px;opacity:0.7;margin-bottom:12px">${plan.reason}</div>
       <div style="display:flex;gap:8px">
-        <button onclick="confirmAgentWrite('${plan.file}', this)" 
+        <button onclick="confirmAgentWrite('${plan.file}', this)"
           data-content="${encodeURIComponent(newContent)}"
           data-sha="${current.sha}"
           style="background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
