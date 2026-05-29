@@ -8,6 +8,15 @@ let pendingRoute = null;
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
+// ─── SESSION AUTO-SAVE ────────────────────────────────────────────────────────
+
+window.addEventListener('beforeunload', async () => {
+  if (window._sessionLog && window._sessionLog.length > 0) {
+    const rawLog = window._sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+    await saveSession(rawLog);
+  }
+});
+
 window.addEventListener('DOMContentLoaded', () => {
   initVoice();
 
