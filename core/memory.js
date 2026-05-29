@@ -85,6 +85,7 @@ async function appendProgress(thread, summary, label) {
   await updateThread(thread.id, { 'Current progress': newProgress });
   return newProgress;
 }
+
 // ─── SESSIONS ────────────────────────────────────────────────────────────────
 
 async function saveSession(rawLog) {
