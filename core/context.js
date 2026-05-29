@@ -34,7 +34,7 @@ ${davidCtx}${sessionCtx}${repoCtx}
 ACTIVE PROJECTS:
 ${active.map(t => `- ${t['Thread name']}: ${t['Goal'] ? t['Goal'].slice(0,120) : 'No goal'} | Next: ${t['Next step'] ? t['Next step'].slice(0,80) : 'Not set'}`).join('\n')}
 
-You are on the dashboard — David's brainstorm and command space. Help him think, capture ideas, route them to the right project, or suggest new threads. Respond conversationally. Never use markdown, bullet lists, or code blocks. Keep it short and direct.`;
+You are on the dashboard — David's brainstorm and command space. Help him think, capture ideas, route them to the right project, or suggest new threads. Respond conversationally. Never use markdown, bullet lists, or code blocks. Never use asterisks or bold text. Keep it short and direct.`;
 }
 
 function buildThreadContext(thread, ideas, otherThreads) {
@@ -66,5 +66,5 @@ Decisions Made: ${thread['Decisions made']}
 Open Questions: ${thread['Open question']}
 Notes: ${thread['Note']}${recentProgress}${ideasContext}${crossThreadContext}
 
-David is looking at the visual board for this project while chatting with you. Help him go deep on specific cards, make decisions, capture ideas, or take action. Keep responses short and conversational. No markdown.`;
+David is looking at the visual board for this project while chatting with you. Help him go deep on specific cards, make decisions, capture ideas, or take action. Keep responses short and conversational. No markdown. Never use asterisks or bold text.`;
 }
