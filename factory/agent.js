@@ -1,11 +1,7 @@
-```javascript
 // ─── AGENT.JS — Agentic builder. Reads, writes, rolls back. ───────────────────
-
-import { supabaseQuery, supabaseExec } from '../api/supabase-admin.js';
 
 const agent = {
 
-  // ── Read a file from the repo ──────────────────────────────────────────────
   async readFile(path) {
     const res = await fetch('/api/github', {
       method: 'POST',
@@ -14,10 +10,9 @@ const agent = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Read failed');
-    return data; // { content, sha }
+    return data;
   },
 
-  // ── List a directory ───────────────────────────────────────────────────────
   async listDir(path = '') {
     const res = await fetch('/api/github', {
       method: 'POST',
@@ -26,10 +21,9 @@ const agent = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'List failed');
-    return data.files; // [{ name, path, type, sha }]
+    return data.files;
   },
 
-  // ── Write a file to the repo ───────────────────────────────────────────────
   async writeFile(path, content, message, sha = null) {
     const res = await fetch('/api/github', {
       method: 'POST',
@@ -39,10 +33,9 @@ const agent = {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Write failed');
     foreman.observe(`agent:write:${path}`);
-    return data; // { success, sha }
+    return data;
   },
 
-  // ── Get recent commits ─────────────────────────────────────────────────────
   async getCommits() {
     const res = await fetch('/api/github', {
       method: 'POST',
@@ -51,10 +44,9 @@ const agent = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Commits failed');
-    return data.commits; // [{ sha, message, date }]
+    return data.commits;
   },
 
-  // ── Map the full repo structure ────────────────────────────────────────────
   async mapRepo() {
     const root = await this.listDir('');
     const folders = root.filter(f => f.type === 'dir');
@@ -66,7 +58,6 @@ const agent = {
     return map;
   },
 
-  // ── Propose a change (David approves before write executes) ───────────────
   async propose(path, newContent, reason) {
     const current = await this.readFile(path);
     return {
@@ -80,7 +71,6 @@ const agent = {
     };
   },
 
-  // ── Rollback to a previous commit (escape hatch) ──────────────────────────
   async rollback(stepsBack = 1) {
     const commits = await this.getCommits();
     if (stepsBack >= commits.length) throw new Error('Not enough commit history');
@@ -93,15 +83,37 @@ const agent = {
     };
   },
 
-  // ── Query Supabase (SELECT queries) ────────────────────────────────────────
-  async supabaseQuery(query, params) {
-    return await supabaseQuery(query, params);
+  async supabaseQuery(table, filters = {}) {
+    const res = await fetch('/api/supabase-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'select', table, filters })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Query failed');
+    return data.data;
   },
 
-  // ── Execute Supabase (INSERT/UPDATE/DELETE) ────────────────────────────────
-  async supabaseExec(query, params) {
-    return await supabaseExec(query, params);
+  async supabaseExec(action, table, payload = {}) {
+    const res = await fetch('/api/supabase-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, table, ...payload })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Exec failed');
+    return data.data;
+  },
+
+  async supabaseSQL(query) {
+    const res = await fetch('/api/supabase-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sql', query })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'SQL failed');
+    return data.data;
   }
 
 };
-```
