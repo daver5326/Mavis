@@ -1,7 +1,5 @@
 // ─── CONTEXT.JS — System prompt assembly ─────────────────────────────────────
 
-import { loadLivingDocumentSummary } from './living_document.js';
-
 function buildDavidContext() {
   if (!davidProfile) return '';
   return `WHO DAVID IS:
@@ -13,10 +11,9 @@ Current Focus: ${davidProfile.current_focus || ''}
 Relationship Notes: ${davidProfile.relationship_notes || ''}`.trim();
 }
 
-async function buildMasterContext(threads, recentSessions = [], repoMap = null) {
+function buildMasterContext(threads, recentSessions = [], repoMap = null) {
   const active = threads.filter(t => t['Status'] === 'Active' && t['thread_type'] !== 'feature');
   const davidCtx = buildDavidContext();
-  const livingDoc = await loadLivingDocumentSummary();
 
   const sessionCtx = recentSessions.length > 0
     ? '\n\nRECENT SESSION MEMORY:\n' + recentSessions.map(s =>
@@ -30,8 +27,8 @@ async function buildMasterContext(threads, recentSessions = [], repoMap = null) 
       ).join('\n')
     : '';
 
-  const identityCtx = livingDoc
-    ? `\n\n=== MAVIS IDENTITY ===\n${livingDoc}`
+  const identityCtx = window._livingDocSummary
+    ? `\n\n=== MAVIS IDENTITY ===\n${window._livingDocSummary}`
     : '';
 
   return `You are Mavis, a personal AI factory for David Rogers. You are not an assistant — you are a thinking partner who knows David's work deeply.
