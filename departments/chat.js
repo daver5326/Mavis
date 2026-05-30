@@ -30,17 +30,17 @@ Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one s
     try {
       const parsed = JSON.parse(intentData.content[0].text.trim().replace(/```json|```/g, ''));
       intent = parsed.intent;
-    } catch(e) {}
+    } catch(e) {
+      intent = 'chat';
+    }
 
     if (intent === 'threadUpdate') { handleThreadUpdate(text); return; }
     if (intent === 'newProject') { handleNewProjectRequest(text); return; }
     if (intent === 'agentAction') { handleAgentAction(text); return; }
 
     const threads = await fetchAllThreads();
-    let repoMap = null;
-    try { repoMap = await agent.mapRepo(); } catch(e) {}
 
-    systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
+    systemContext = buildMasterContext(threads, window._recentSessions || [], null);
     chatHistory.push({ role: 'user', content: text });
 
     const routingPromise = analyzeAndRoute(text, threads);
@@ -80,6 +80,10 @@ Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one s
       if (routing && (routing.route || routing.suggest_new)) {
         setTimeout(() => showRoutingSuggestion(routing, text), 600);
       }
+
+      agent.mapRepo().then(repoMap => {
+        systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
+      }).catch(e => {});
 
     } catch(e) {
       thinking.remove();
