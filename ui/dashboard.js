@@ -150,7 +150,18 @@ function dismissRoute() {
 
 async function greetOnLoad() {
   try {
-    window._livingDocSummary = await loadLivingDocumentSummary();
+    // Load living document summary directly
+    try {
+      const summaryRes = await fetch('/api/supabase-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'select', table: 'mavis_config', filters: { key: 'living_document_summary' } })
+      });
+      const summaryData = await summaryRes.json();
+      if (summaryData.data && summaryData.data[0]) {
+        window._livingDocSummary = summaryData.data[0].value;
+      }
+    } catch(e) {}
 
     const threads = await fetchAllThreads();
     const active = threads.filter(t => t['Status'] === 'Active' && t['thread_type'] !== 'feature' && !isInTriage(t));
