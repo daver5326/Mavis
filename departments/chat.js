@@ -11,37 +11,17 @@ async function sendMessage(inputId) {
     showDashboardMessage('user', text);
     if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
-    // ── LLM intent classification ─────────────────────────────────────────
-    let intent = 'chat';
-    try {
-      const intentResponse = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system: `You are Mavis's intent classifier. Classify David's input into exactly one of these intents:
-- "agentAction": any request to read, write, create, update, fix, or modify a file, codebase, or database
-- "threadUpdate": filing information into a project thread
-- "newProject": starting a brand new external project or repo
-- "chat": everything else
-Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one sentence>"}`,
-          messages: [{ role: 'user', content: text }]
-        })
-      });
-      const intentData = await intentResponse.json();
-      const parsed = JSON.parse(intentData.content[0].text.trim().replace(/```json|```/g, ''));
-      intent = parsed.intent;
-    } catch(e) {
-      intent = 'chat';
-    }
+    // ── Explicit agent trigger ────────────────────────────────────────────
+    const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
+    const isAgentCall = agentTriggers.some(t => text.toLowerCase().startsWith(t));
+    if (isAgentCall) { handleAgentAction(text); return; }
 
-    if (intent === 'threadUpdate') { handleThreadUpdate(text); return; }
-    if (intent === 'newProject') { handleNewProjectRequest(text); return; }
-    if (intent === 'agentAction') { handleAgentAction(text); return; }
+    if (detectIntent(text) === 'threadUpdate') { handleThreadUpdate(text); return; }
+    if (detectIntent(text) === 'newProject') { handleNewProjectRequest(text); return; }
 
     // ── Regular chat ──────────────────────────────────────────────────────
     const threads = await fetchAllThreads();
 
-    // Non-blocking repo map — cached after first load
     let repoMap = window._cachedRepoMap || null;
     agent.mapRepo().then(map => { window._cachedRepoMap = map; }).catch(() => {});
 
