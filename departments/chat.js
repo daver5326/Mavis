@@ -11,23 +11,23 @@ async function sendMessage(inputId) {
     showDashboardMessage('user', text);
     if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
-    const intentResponse = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system: `You are Mavis's intent classifier. Classify David's input into exactly one of these intents:
+    // ── LLM intent classification ─────────────────────────────────────────
+    let intent = 'chat';
+    try {
+      const intentResponse = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system: `You are Mavis's intent classifier. Classify David's input into exactly one of these intents:
 - "agentAction": any request to read, write, create, update, fix, or modify a file, codebase, or database
 - "threadUpdate": filing information into a project thread
 - "newProject": starting a brand new external project or repo
 - "chat": everything else
-
 Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one sentence>"}`,
-        messages: [{ role: 'user', content: text }]
-      })
-    });
-    const intentData = await intentResponse.json();
-    let intent = 'chat';
-    try {
+          messages: [{ role: 'user', content: text }]
+        })
+      });
+      const intentData = await intentResponse.json();
       const parsed = JSON.parse(intentData.content[0].text.trim().replace(/```json|```/g, ''));
       intent = parsed.intent;
     } catch(e) {
@@ -38,9 +38,14 @@ Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one s
     if (intent === 'newProject') { handleNewProjectRequest(text); return; }
     if (intent === 'agentAction') { handleAgentAction(text); return; }
 
+    // ── Regular chat ──────────────────────────────────────────────────────
     const threads = await fetchAllThreads();
 
-    systemContext = buildMasterContext(threads, window._recentSessions || [], null);
+    // Non-blocking repo map — cached after first load
+    let repoMap = window._cachedRepoMap || null;
+    agent.mapRepo().then(map => { window._cachedRepoMap = map; }).catch(() => {});
+
+    systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
     chatHistory.push({ role: 'user', content: text });
 
     const routingPromise = analyzeAndRoute(text, threads);
@@ -80,10 +85,6 @@ Respond with ONLY valid JSON: {"intent": "<one of the above>", "reason": "<one s
       if (routing && (routing.route || routing.suggest_new)) {
         setTimeout(() => showRoutingSuggestion(routing, text), 600);
       }
-
-      agent.mapRepo().then(repoMap => {
-        systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
-      }).catch(e => {});
 
     } catch(e) {
       thinking.remove();
