@@ -1,5 +1,7 @@
 // ─── CHAT.JS — Conversation engine ───────────────────────────────────────────
 
+const MAX_HISTORY_WINDOW = 10;
+
 async function sendMessage(inputId) {
   const inputElId = inputId || (currentView === 'dashboard' ? 'dashboard-input' : 'chat-input');
   const input = document.getElementById(inputElId);
@@ -42,7 +44,7 @@ async function sendMessage(inputId) {
         fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ system: systemContext, messages: chatHistory.slice(-10) })
+          body: JSON.stringify({ system: systemContext, messages: chatHistory.slice(-MAX_HISTORY_WINDOW) })
         }),
         routingPromise
       ]);
@@ -56,10 +58,6 @@ async function sendMessage(inputId) {
         if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
         chatHistory.push({ role: 'assistant', content: reply });
         speak(reply);
-        if (window._sessionLog && window._sessionLog.length >= 2) {
-          const rawLog = window._sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-          saveSession(rawLog);
-        }
       }
 
       if (routing && (routing.route || routing.suggest_new)) {
@@ -73,7 +71,7 @@ async function sendMessage(inputId) {
     return;
   }
 
-  // Thread view
+  // ── Thread view ───────────────────────────────────────────────────────────
   addMessage('user', text);
   chatHistory.push({ role: 'user', content: text });
 
@@ -87,7 +85,7 @@ async function sendMessage(inputId) {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system: systemContext, messages: chatHistory.slice(-10) })
+      body: JSON.stringify({ system: systemContext, messages: chatHistory.slice(-MAX_HISTORY_WINDOW) })
     });
     const data = await response.json();
     thinking.remove();
@@ -119,6 +117,7 @@ async function handleThreadUpdate(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        // TODO (medium): move prompt to core/constants.js
         system: `You are Mavis organizing information from David into the right project thread.
 Active threads:
 ${threadList}
@@ -162,6 +161,16 @@ Respond with ONLY valid JSON:
   } catch(e) {
     status.textContent = 'Filing failed: ' + e.message;
   }
+}
+
+async function endSession() {
+  if (!window._sessionLog || window._sessionLog.length < 2) return;
+  try {
+    await foreman.writeSessionReport(window._sessionLog);
+    const insight = await foreman.surface();
+    if (insight) showDashboardMessage('assistant', `Foreman: ${insight}`);
+  } catch(e) { console.error('endSession error:', e); }
+  window._sessionLog = [];
 }
 
 async function autoSaveProgress() {
