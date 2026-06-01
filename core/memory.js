@@ -1,5 +1,6 @@
 // ─── MEMORY.JS — All Supabase interactions ───────────────────────────────────
 
+// TODO (medium): move credentials to a config module
 const SUPABASE_URL = 'https://jbsocnomwxodqyhiukcl.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impic29jbm9td3hvZHF5aGl1a2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjQ5NTUsImV4cCI6MjA5Mzg0MDk1NX0.ehX6AEqpSpVAF9Q3UxIabZXdZKLDqKKP9KL3pDIPhHE';
 
@@ -13,13 +14,14 @@ let davidProfile = null;
 
 async function loadDavidProfile() {
   try {
-    const result = await db.from('David').select('*').limit(1).single();
+    const result = await db.from('david').select('*').limit(1).single();
     if (result.data) davidProfile = result.data;
   } catch(e) { davidProfile = null; }
 }
 
 async function updateDavidProfile(sessionSummary) {
   if (!davidProfile) return;
+  // TODO (medium): extract LLM logic to foreman.js, gate on session substance
   try {
     const response = await fetch('/api/chat', {
       method: 'POST',
@@ -34,7 +36,7 @@ async function updateDavidProfile(sessionSummary) {
       const updates = JSON.parse(data.content[0].text.trim());
       if (Object.keys(updates).length > 0) {
         updates.last_updated = new Date().toISOString();
-        await db.from('David').update(updates).eq('id', davidProfile.id);
+        await db.from('david').update(updates).eq('id', davidProfile.id);
         Object.assign(davidProfile, updates);
       }
     }
@@ -89,6 +91,7 @@ async function appendProgress(thread, summary, label) {
 // ─── SESSIONS ────────────────────────────────────────────────────────────────
 
 async function saveSession(rawLog) {
+  // TODO (medium): generate real summary via LLM instead of slice
   try {
     await db.from('sessions').insert([{
       raw_log: rawLog,
