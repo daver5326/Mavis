@@ -107,7 +107,7 @@ async function handleDbExec(params, reason, msgContainer, status) {
     <div style="margin-bottom:8px">Proposed database operation:</div>
     <div style="font-size:12px;opacity:0.7;margin-bottom:12px">${reason}</div>
     <div style="font-size:11px;background:#1a1a1a;padding:8px;border-radius:6px;margin-bottom:12px">
-      ${params.action} → ${params.table}
+      ${params.action} → ${params.action === 'sql' ? params.query : params.table}
     </div>
     <div style="display:flex;gap:8px">
       <button onclick="confirmDbExec(this)"
@@ -167,7 +167,12 @@ async function confirmDbExec(btn) {
   btn.textContent = 'Executing...';
   btn.disabled = true;
   try {
-    await agent.supabaseExec(params.action, params.table, params);
+    let result;
+    if (params.action === 'sql') {
+      result = await agent.supabaseSQL(params.query);
+    } else {
+      result = await agent.supabaseExec(params.action, params.table, params);
+    }
     msgEl.innerHTML = 'Executed successfully.';
     _pendingDbExec = null;
   } catch(e) {
