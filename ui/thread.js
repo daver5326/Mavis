@@ -201,6 +201,9 @@ function renderFeatureUI(thread) {
 
 function backToDashboard() {
   autoSaveProgress();
+  endSession();
+
+  
   window.speechSynthesis.cancel();
   if (isListening && recognition) { isListening = false; recognition.stop(); }
   audioEnabled = false;
