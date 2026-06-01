@@ -1,9 +1,5 @@
 // ─── MEMORY.JS — All Supabase interactions ───────────────────────────────────
 
-// TODO (medium): move credentials to a config module
-const SUPABASE_URL = 'https://jbsocnomwxodqyhiukcl.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impic29jbm9td3hvZHF5aGl1a2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjQ5NTUsImV4cCI6MjA5Mzg0MDk1NX0.ehX6AEqpSpVAF9Q3UxIabZXdZKLDqKKP9KL3pDIPhHE';
-
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 window.db = db;
@@ -21,7 +17,7 @@ async function loadDavidProfile() {
 
 async function updateDavidProfile(sessionSummary) {
   if (!davidProfile) return;
-  // TODO (medium): extract LLM logic to foreman.js, gate on session substance
+  // TODO (medium): gate on session substance
   try {
     const response = await fetch('/api/chat', {
       method: 'POST',
