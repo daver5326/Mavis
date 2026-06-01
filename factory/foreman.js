@@ -1,62 +1,199 @@
-// ─── FOREMAN.JS — Pattern observer, shop foreman agent ───────────────────────
+// ─── FOREMAN.JS — Pattern observer, health monitor, shop foreman ─────────────
 
 const foreman = {
 
-  log: [],
+ log: [],
+ sessionStart: new Date().toISOString(),
 
-  observe(event) {
-    this.log.push({
-      event,
-      timestamp: new Date().toISOString()
-    });
-    this.persist();
-  },
+ // ─── OBSERVE ───────────────────────────────────────────────────────────────
 
-  getPatterns() {
-    const counts = {};
-    this.log.forEach(entry => {
-      counts[entry.event] = (counts[entry.event] || 0) + 1;
-    });
-    return counts;
-  },
+ observe(event) {
+   this.log.push({ event, timestamp: new Date().toISOString() });
+ },
 
-  async surface() {
-    const usage = factoryRegistry.getDepartmentUsage();
-    const patterns = this.getPatterns();
-    const projects = factoryRegistry.getAllProjects();
+ // ─── SESSION HEALTH REPORT ─────────────────────────────────────────────────
 
-    if (projects.length < 2) return null;
+ async writeSessionReport(sessionLog) {
+   if (!sessionLog || sessionLog.length < 2) return;
+   try {
+     const response = await fetch('/api/chat', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         system: `You are the Mavis Foreman. You observe how David works — not just what he builds, but how he thinks, decides, and moves. Write a brief session report with three parts: (1) SUMMARY: what was accomplished in one sentence. (2) PATTERNS: one observation about how David worked today. (3) HEALTH: one flag if anything drifted from good practice. Be specific. No markdown. No padding.`,
+         messages: [{
+           role: 'user',
+           content: `Session log:\n${sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 3000)}`
+         }]
+       })
+     });
+     const data = await response.json();
+     if (!data.content || !data.content[0]) return;
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system: `You are the Mavis Shop Foreman. You observe patterns across all projects and surface insights. Be brief and specific. One insight only. No markdown.`,
-          messages: [{
-            role: 'user',
-            content: `Projects: ${JSON.stringify(projects)}\nDepartment usage: ${JSON.stringify(usage)}\nEvent patterns: ${JSON.stringify(patterns)}\n\nWhat is the single most useful pattern or optimization you notice?`
-          }]
-        })
-      });
-      const data = await response.json();
-      if (data.content && data.content[0]) return data.content[0].text.trim();
-    } catch(e) {}
-    return null;
-  },
+     const report = data.content[0].text.trim();
+     const patterns = this.getPatterns();
 
-  persist() {
-    try {
-      localStorage.setItem('mavis_foreman_log', JSON.stringify(this.log.slice(-100)));
-    } catch(e) {}
-  },
+     await fetch('/api/supabase-admin', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         action: 'insert',
+         table: 'sessions',
+         data: {
+           raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
+           summary: report,
+           key_decisions: '',
+           patterns_observed: JSON.stringify(patterns),
+           project_tags: []
+         }
+       })
+     });
+   } catch(e) { console.error('Foreman session report error:', e); }
+ },
 
-  load() {
-    try {
-      const saved = localStorage.getItem('mavis_foreman_log');
-      if (saved) this.log = JSON.parse(saved);
-    } catch(e) {}
-  }
+ // ─── COMMANDMENT HEALTH CHECK ──────────────────────────────────────────────
+
+ async healthCheck() {
+   try {
+     const repoMap = await agent.mapRepo();
+     const fileList = Object.entries(repoMap)
+       .flatMap(([folder, files]) =>
+         files.map(f => folder === 'root' ? f : `${folder}/${f}`)
+       )
+       .filter(f => f.endsWith('.js') || f.endsWith('.html'));
+
+     const sampleFiles = fileList.slice(0, 5);
+     const fileContents = await Promise.all(
+       sampleFiles.map(async f => {
+         try {
+           const result = await agent.readFile(f);
+           return `FILE: ${f}\n${result.content.slice(0, 800)}`;
+         } catch(e) { return `FILE: ${f}\n[unreadable]`; }
+       })
+     );
+
+     const response = await fetch('/api/chat', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         system: `You are the Mavis Foreman conducting a health check. Review these files against these commandments: (1) Single responsibility per file. (2) Modern agentic best practices. (3) Platform agnostic. (4) Agent proposes, David approves. (5) No corner painting. (6) Factory builds itself. (7) Seek agentic approaches. (8) Watch cost. (9) Professional code only. (10) Verify before proposing. (11) Token efficiency. (12) Factory audits itself. Return ONLY a JSON array of findings: [{file, commandment, issue, severity}]. Severity: critical|high|medium|low.`,
+         messages: [{
+           role: 'user',
+           content: fileContents.join('\n\n---\n\n')
+         }]
+       })
+     });
+
+     const data = await response.json();
+     if (!data.content || !data.content[0]) return null;
+
+     const raw = data.content[0].text.trim().replace(/```json|```/g, '');
+     const findings = JSON.parse(raw);
+
+     await fetch('/api/supabase-admin', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         action: 'upsert',
+         table: 'mavis_config',
+         data: {
+           key: 'last_health_check',
+           value: JSON.stringify({ timestamp: new Date().toISOString(), findings })
+         }
+       })
+     });
+
+     return findings;
+   } catch(e) {
+     console.error('Foreman health check error:', e);
+     return null;
+   }
+ },
+
+ // ─── PATTERN ANALYSIS ──────────────────────────────────────────────────────
+
+ getPatterns() {
+   const counts = {};
+   this.log.forEach(entry => {
+     counts[entry.event] = (counts[entry.event] || 0) + 1;
+   });
+   return counts;
+ },
+
+ // ─── SURFACE INSIGHT ───────────────────────────────────────────────────────
+
+ async surface() {
+   try {
+     const sessionsRes = await fetch('/api/supabase-admin', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         action: 'select',
+         table: 'sessions',
+         filters: {}
+       })
+     });
+     const sessionsData = await sessionsRes.json();
+     const sessions = sessionsData.data || [];
+     if (sessions.length < 2) return null;
+
+     const recentSummaries = sessions
+       .slice(0, 5)
+       .map(s => s.summary)
+       .filter(Boolean)
+       .join('\n\n');
+
+     const response = await fetch('/api/chat', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         system: `You are the Mavis Foreman. You have summaries of recent sessions. Surface one insight David hasn't explicitly noticed — a pattern, a risk, or an opportunity. One sentence. Direct. No markdown.`,
+         messages: [{
+           role: 'user',
+           content: `Recent session summaries:\n${recentSummaries}`
+         }]
+       })
+     });
+     const data = await response.json();
+     if (data.content && data.content[0]) return data.content[0].text.trim();
+   } catch(e) {}
+   return null;
+ },
+
+ // ─── PROPOSE PROJECTS ──────────────────────────────────────────────────────
+
+ async proposeProjects() {
+   try {
+     const sessionsRes = await fetch('/api/supabase-admin', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ action: 'select', table: 'sessions', filters: {} })
+     });
+     const sessionsData = await sessionsRes.json();
+     const sessions = sessionsData.data || [];
+     if (sessions.length < 3) return null;
+
+     const summaries = sessions
+       .slice(0, 10)
+       .map(s => s.summary)
+       .filter(Boolean)
+       .join('\n\n');
+
+     const response = await fetch('/api/chat', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         system: `You are the Mavis Foreman. Based on patterns across sessions, identify if there is a project David should start that he hasn't named yet. If yes, return JSON: {"name": "", "goal": "", "reason": ""}. If no clear project, return {}. No markdown.`,
+         messages: [{ role: 'user', content: `Session summaries:\n${summaries}` }]
+       })
+     });
+     const data = await response.json();
+     if (!data.content || !data.content[0]) return null;
+     const raw = data.content[0].text.trim().replace(/```json|```/g, '');
+     const proposal = JSON.parse(raw);
+     if (!proposal.name) return null;
+     return proposal;
+   } catch(e) { return null; }
+ }
+
 };
-
-foreman.load();
