@@ -1,5 +1,4 @@
 // ─── CONTEXT.JS — System prompt assembly ─────────────────────────────────────
-// TODO (medium): extract system prompt strings to core/constants.js
 // TODO (medium): add token size cap to buildMasterContext
 
 function buildDavidContext() {
@@ -11,7 +10,7 @@ Values: ${davidProfile.values || ''}
 Observed Patterns: ${davidProfile.patterns || ''}
 Current Focus: ${davidProfile.current_focus || ''}
 Relationship Notes: ${davidProfile.relationship_notes || ''}
-Council: ${davidProfile.council || ''}`.trim();
+${COUNCIL_BLOCK}`.trim();
 }
 
 function buildMasterContext(threads, recentSessions = [], repoMap = null) {
@@ -34,7 +33,7 @@ function buildMasterContext(threads, recentSessions = [], repoMap = null) {
     ? `\n\n=== MAVIS IDENTITY ===\n${window._livingDocSummary}`
     : '';
 
-  return `You are Mavis, a personal AI factory for David Rogers. You are not an assistant — you are a thinking partner who knows David's work deeply.
+  return `${MAVIS_IDENTITY}
 ${identityCtx}
 
 ${davidCtx}${sessionCtx}${repoCtx}
@@ -42,7 +41,7 @@ ${davidCtx}${sessionCtx}${repoCtx}
 ACTIVE PROJECTS:
 ${active.map(t => `- ${t['Thread name']}: ${t['Goal'] ? t['Goal'].slice(0,120) : 'No goal'} | Next: ${t['Next step'] ? t['Next step'].slice(0,80) : 'Not set'}`).join('\n')}
 
-You are on the dashboard — David's brainstorm and command space. Help him think, capture ideas, route them to the right project, or suggest new threads. Respond conversationally. Never use markdown, bullet lists, or code blocks. Never use asterisks or bold text. Keep it short and direct.`;
+${DASHBOARD_INSTRUCTIONS}`;
 }
 
 function buildThreadContext(thread, ideas, otherThreads) {
@@ -62,7 +61,7 @@ function buildThreadContext(thread, ideas, otherThreads) {
     ? '\n\nRECENT HISTORY:\n' + thread['Current progress'].slice(-2000)
     : '';
 
-  return `You are Mavis, a personal AI factory for David Rogers.
+  return `${MAVIS_IDENTITY}
 
 ${davidCtx}
 
@@ -74,5 +73,5 @@ Decisions Made: ${thread['Decisions made']}
 Open Questions: ${thread['Open question']}
 Notes: ${thread['Note']}${recentProgress}${ideasContext}${crossThreadContext}
 
-David is looking at the visual board for this project while chatting with you. Help him go deep on specific cards, make decisions, capture ideas, or take action. Keep responses short and conversational. No markdown. Never use asterisks or bold text.`;
+${THREAD_INSTRUCTIONS}`;
 }
