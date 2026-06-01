@@ -224,11 +224,25 @@ body {
 }
 
 .mic-btn { background: var(--white-08); border: 1px solid var(--border); }
+/* ── THREAD VIEW ── */
+#thread-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
 
-/* ── BOARD ── */
 #board-content {
-  padding: 16px;
+  flex: 1;
   overflow-y: auto;
+}
+
+#chat-messages {
+  max-height: 35vh;
+  overflow-y: auto;
+}
+
+
 }
 
 .where-card {
