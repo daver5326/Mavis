@@ -1,4 +1,6 @@
 // ─── CONTEXT.JS — System prompt assembly ─────────────────────────────────────
+// TODO (medium): extract system prompt strings to core/constants.js
+// TODO (medium): add token size cap to buildMasterContext
 
 function buildDavidContext() {
   if (!davidProfile) return '';
@@ -8,7 +10,8 @@ Work Style: ${davidProfile.work_style || ''}
 Values: ${davidProfile.values || ''}
 Observed Patterns: ${davidProfile.patterns || ''}
 Current Focus: ${davidProfile.current_focus || ''}
-Relationship Notes: ${davidProfile.relationship_notes || ''}`.trim();
+Relationship Notes: ${davidProfile.relationship_notes || ''}
+Council: ${davidProfile.council || ''}`.trim();
 }
 
 function buildMasterContext(threads, recentSessions = [], repoMap = null) {
