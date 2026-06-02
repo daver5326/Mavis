@@ -32,7 +32,7 @@ async function loadThreads() {
       const isComplete = thread['Status'] === 'Complete';
       const isPaused = thread['Status'] === 'Paused';
       const isFeature = thread['thread_type'] === 'feature';
-      return `<div class="thread-card ${isPaused ? 'paused' : ''} ${isComplete ? 'complete' : ''} ${isFeature ? 'feature' : ''}" onclick="openThread(${thread.id})">
+      return `<div class="thread-card ${isPaused ? 'paused' : ''} ${isComplete ? 'complete' : ''} ${isFeature ? 'feature' : ''}" data-thread-id="${thread.id}">
         <div class="platform-badge">${isFeature ? 'Feature' : (thread.platform || 'Mavis')}</div>
         <h2>${thread['Thread name']}</h2>
         <p class="thread-status">${thread['Status'] || 'Active'} · ${thread['Next step'] ? thread['Next step'].slice(0,60) + '...' : (isFeature ? 'Tap to use' : 'No next step set')}</p>
@@ -62,7 +62,7 @@ async function loadThreads() {
         <p class="triage-desc">Inactive 14+ days — review, reactivate, or close.</p>
         ${triage.map(t => {
           const days = daysSinceActivity(t);
-          return `<div class="thread-card triage" onclick="openThread(${t.id})">
+          return `<div class="thread-card triage" data-thread-id="${t.id}">
             <div class="platform-badge">${t.platform || 'Mavis'}</div>
             <h2>${t['Thread name']}</h2>
             <p class="thread-status">Inactive ${days !== null ? days + ' days' : ''} · ${t['Next step'] ? t['Next step'].slice(0,50) + '...' : 'No next step set'}</p>
@@ -72,6 +72,10 @@ async function loadThreads() {
     }
 
     document.getElementById('thread-list').innerHTML = html;
+
+    document.querySelectorAll('.thread-card[data-thread-id]').forEach(card => {
+      card.addEventListener('click', () => openThread(parseInt(card.dataset.threadId)));
+    });
 
   } catch(e) {
     document.getElementById('thread-list').innerHTML = '<p class="loading">Error: ' + e.message + '</p>';
@@ -87,22 +91,26 @@ function showRoutingSuggestion(routing, text) {
     div.className = 'message assistant';
     div.innerHTML = `${routing.reason} — route this to <strong>${routing.thread_name}</strong>?
       <div style="display:flex;gap:8px;margin-top:10px;">
-        <button onclick="confirmRoute()" style="background:var(--purple-bright);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;font-weight:700;cursor:pointer;">Yes, route it</button>
-        <button onclick="dismissRoute()" style="background:var(--white-08);color:var(--text-secondary);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;cursor:pointer;">Just chat</button>
+        <button id="confirm-route-btn" style="background:var(--purple-bright);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;font-weight:700;cursor:pointer;">Yes, route it</button>
+        <button id="dismiss-route-btn" style="background:var(--white-08);color:var(--text-secondary);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;cursor:pointer;">Just chat</button>
       </div>`;
     msgContainer.appendChild(div);
     msgContainer.scrollTop = 999999;
+    document.getElementById('confirm-route-btn').addEventListener('click', confirmRoute);
+    document.getElementById('dismiss-route-btn').addEventListener('click', dismissRoute);
   } else if (routing.suggest_new) {
     pendingRoute = { type: 'new', suggested_name: routing.suggested_name, text };
     const div = document.createElement('div');
     div.className = 'message assistant';
     div.innerHTML = `${routing.reason} — start a new thread called <strong>${routing.suggested_name}</strong>?
       <div style="display:flex;gap:8px;margin-top:10px;">
-        <button onclick="confirmRoute()" style="background:var(--purple-bright);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;font-weight:700;cursor:pointer;">Yes, create it</button>
-        <button onclick="dismissRoute()" style="background:var(--white-08);color:var(--text-secondary);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;cursor:pointer;">Just chat</button>
+        <button id="confirm-route-btn" style="background:var(--purple-bright);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;font-weight:700;cursor:pointer;">Yes, create it</button>
+        <button id="dismiss-route-btn" style="background:var(--white-08);color:var(--text-secondary);border:1px solid var(--border);border-radius:8px;padding:8px 16px;font-family:Syne,sans-serif;font-size:12px;cursor:pointer;">Just chat</button>
       </div>`;
     msgContainer.appendChild(div);
     msgContainer.scrollTop = 999999;
+    document.getElementById('confirm-route-btn').addEventListener('click', confirmRoute);
+    document.getElementById('dismiss-route-btn').addEventListener('click', dismissRoute);
   } else {
     return false;
   }
@@ -148,9 +156,28 @@ function dismissRoute() {
   if (lastMsg) lastMsg.remove();
 }
 
+async function loadColdStartDoc() {
+  try {
+    const res = await fetch('/api/supabase-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'select',
+        table: 'mavis_config',
+        filters: { key: 'cold_start_document' }
+      })
+    });
+    const data = await res.json();
+    if (data.data && data.data[0]) {
+      window._coldStartDoc = data.data[0].value;
+    }
+  } catch(e) { console.error('loadColdStartDoc error:', e); }
+}
+
 async function greetOnLoad() {
   try {
-    // Load living document summary directly
+    await loadColdStartDoc();
+
     try {
       const summaryRes = await fetch('/api/supabase-admin', {
         method: 'POST',
