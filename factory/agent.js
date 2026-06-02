@@ -48,12 +48,26 @@ const agent = {
   },
 
   async mapRepo() {
-    const root = await this.listDir('');
-    const folders = root.filter(f => f.type === 'dir');
-    const map = { root: root.map(f => f.name) };
-    for (const folder of folders) {
-      const contents = await this.listDir(folder.path);
-      map[folder.name] = contents.map(f => f.name);
+    const res = await fetch('/api/github', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'tree' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Tree failed');
+
+    const map = {};
+    for (const item of data.tree) {
+      if (item.type !== 'blob') continue;
+      const parts = item.path.split('/');
+      if (parts.length === 1) {
+        if (!map['root']) map['root'] = [];
+        map['root'].push(parts[0]);
+      } else {
+        const folder = parts[0];
+        if (!map[folder]) map[folder] = [];
+        map[folder].push(parts.slice(1).join('/'));
+      }
     }
     return map;
   },
