@@ -29,9 +29,9 @@
   <!-- Thread View -->
   <div id="thread-view" style="display:none;">
     <div class="top-bar">
-      <button onclick="backToDashboard()" class="back-btn">←</button>
+      <button id="back-btn" class="back-btn">←</button>
       <div id="thread-title" class="thread-title-text"></div>
-      <button onclick="openEditThread()" class="icon-btn">⋯</button>
+      <button id="edit-thread-btn" class="icon-btn">⋯</button>
     </div>
     <div id="board-content"></div>
     <div id="chat-messages"></div>
@@ -44,7 +44,7 @@
   <!-- New Thread Form -->
   <div id="new-thread-view" style="display:none;">
     <div class="top-bar">
-      <button onclick="closeNewThreadForm()" class="back-btn">←</button>
+      <button id="close-new-thread-btn" class="back-btn">←</button>
       <div class="app-title">New Thread</div>
     </div>
     <div class="form-body">
@@ -59,14 +59,14 @@
         <option value="Claude">Claude</option>
         <option value="Other">Other</option>
       </select>
-      <button onclick="saveNewThread()" class="primary-btn">Create Thread</button>
+      <button id="save-new-thread-btn" class="primary-btn">Create Thread</button>
     </div>
   </div>
 
   <!-- Edit Thread Form -->
   <div id="edit-thread-view" style="display:none;">
     <div class="top-bar">
-      <button onclick="closeEditThread()" class="back-btn">←</button>
+      <button id="close-edit-thread-btn" class="back-btn">←</button>
       <div class="app-title">Edit Thread</div>
     </div>
     <div class="form-body">
@@ -82,15 +82,15 @@
       <input id="et-decisions" placeholder="Decisions made" class="form-input">
       <input id="et-questions" placeholder="Open questions" class="form-input">
       <input id="et-notes" placeholder="Notes" class="form-input">
-      <button onclick="saveEditThread()" class="primary-btn">Save</button>
-      <button onclick="deleteThread()" class="danger-btn">Delete Thread</button>
+      <button id="save-edit-thread-btn" class="primary-btn">Save</button>
+      <button id="delete-thread-btn" class="danger-btn">Delete Thread</button>
     </div>
   </div>
 
   <!-- Card Overlay -->
   <div id="card-overlay">
     <div class="overlay-content">
-      <button onclick="closeCardDetail()" class="close-btn">✕</button>
+      <button id="close-card-btn" class="close-btn">✕</button>
       <div id="ov-zone" class="ov-zone"></div>
       <div id="ov-title" class="ov-title"></div>
       <div id="ov-body" class="ov-body"></div>
