@@ -3,18 +3,8 @@
 const TRIAGE_DAYS = 14;
 
 function getLastActivityDate(thread) {
-  const progress = thread['Current progress'] || '';
-  const lastSaved = progress.match(/\[(?:Auto-saved|Session) ([^\]]+)\]/g);
-  if (lastSaved) {
-    const lastEntry = lastSaved[lastSaved.length - 1];
-    const dateStr = lastEntry.replace(/\[(?:Auto-saved|Session) /, '').replace(']', '').split(' ')[0];
-    const lastDate = new Date(dateStr);
-    if (!isNaN(lastDate)) return lastDate;
-  }
-  if (thread['created_at']) {
-    const created = new Date(thread['created_at']);
-    if (!isNaN(created)) return created;
-  }
+  if (thread['last_activity_at']) return new Date(thread['last_activity_at']);
+  if (thread['created_at']) return new Date(thread['created_at']);
   return null;
 }
 
@@ -81,7 +71,7 @@ async function triageReactivate(id) {
   const thread = await fetchThread(id);
   if (!thread) return;
   const newProgress = (thread['Current progress'] || '') + '\n\n[Reactivated ' + new Date().toLocaleDateString() + ']';
-  await updateThread(id, { 'Current progress': newProgress });
+  await updateThread(id, { 'Current progress': newProgress, 'last_activity_at': new Date().toISOString() });
   clearInsightCache(id);
   setTimeout(() => loadThreads(), 1000);
   await openThread(id);
@@ -94,10 +84,9 @@ async function triageReview(id) {
 }
 
 async function triageArchive(id) {
-  await updateThread(id, { 'Status': 'Complete' });
+  await updateThread(id, { 'Status': 'Complete', 'last_activity_at': new Date().toISOString() });
   clearInsightCache(id);
   setTimeout(() => loadThreads(), 500);
   backToDashboard();
   setTimeout(() => showDashboardMessage('assistant', 'Archived. Good call — keeping things clean.'), 300);
 }
-
