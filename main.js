@@ -21,6 +21,8 @@ window.addEventListener('visibilitychange', async () => {
 
 window.addEventListener('DOMContentLoaded', () => {
   initVoice();
+    initEventListeners();
+
 
   document.getElementById('send-btn').addEventListener('click', () => sendMessage('chat-input'));
   document.getElementById('chat-input').addEventListener('keypress', function(e) {
