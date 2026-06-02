@@ -23,8 +23,10 @@ async function handleAgentAction(text) {
   params: { file, instruction, reason }
 - readFile: read a file from the GitHub repo
   params: { file }
-- dbExec: execute a database operation (INSERT, UPDATE, DELETE, CREATE TABLE)
-  params: { action ("insert"|"update"|"delete"|"sql"), table, data?, filters?, query? }
+- dbExec: execute a database operation
+  params: { action ("insert"|"upsert"|"update"|"delete"|"sql"), table, data?, filters?, query? }
+  Use "upsert" when the key may already exist and should be replaced.
+  Use "insert" only for new records that are guaranteed not to exist.
 - dbQuery: read from the database (SELECT)
   params: { table, filters? }
 - multiStep: multiple operations in sequence
@@ -79,21 +81,44 @@ async function handleWriteFile(params, reason, msgContainer, status) {
   status.remove();
   const proposal = document.createElement('div');
   proposal.className = 'message assistant';
-  proposal.innerHTML = `
-    <div style="margin-bottom:8px">${current ? 'Proposed change to' : 'Proposed new file'} <strong>${params.file}</strong>:</div>
-    <div style="font-size:12px;opacity:0.7;margin-bottom:12px">${reason}</div>
-    <div style="display:flex;gap:8px">
-      <button onclick="confirmAgentWrite('${params.file}', this)"
-        data-content="${encodeURIComponent(newContent)}"
-        data-sha="${current ? current.sha : ''}"
-        style="background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
-        Approve & Commit
-      </button>
-      <button onclick="this.closest('.message').remove()"
-        style="background:#333;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
-        Reject
-      </button>
-    </div>`;
+
+  const previewDiv = document.createElement('div');
+  previewDiv.style.marginBottom = '8px';
+  previewDiv.innerHTML = `${current ? 'Proposed change to' : 'Proposed new file'} <strong>${params.file}</strong>:`;
+
+  const reasonDiv = document.createElement('div');
+  reasonDiv.style.cssText = 'font-size:12px;opacity:0.7;margin-bottom:12px';
+  reasonDiv.textContent = reason;
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px';
+
+  const approveBtn = document.createElement('button');
+  approveBtn.textContent = 'Approve & Commit';
+  approveBtn.style.cssText = 'background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer';
+
+  const rejectBtn = document.createElement('button');
+  rejectBtn.textContent = 'Reject';
+  rejectBtn.style.cssText = 'background:#333;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer';
+
+  approveBtn.addEventListener('click', async () => {
+    approveBtn.textContent = 'Committing...';
+    approveBtn.disabled = true;
+    try {
+      await agent.writeFile(params.file, newContent, `Agent: update ${params.file}`, current ? current.sha : null);
+      proposal.innerHTML = `Committed. ${params.file} updated successfully.`;
+    } catch(e) {
+      proposal.innerHTML = `Commit failed: ${e.message}`;
+    }
+  });
+
+  rejectBtn.addEventListener('click', () => proposal.remove());
+
+  btnRow.appendChild(approveBtn);
+  btnRow.appendChild(rejectBtn);
+  proposal.appendChild(previewDiv);
+  proposal.appendChild(reasonDiv);
+  proposal.appendChild(btnRow);
   msgContainer.appendChild(proposal);
   msgContainer.scrollTop = 999999;
 }
@@ -101,24 +126,62 @@ async function handleWriteFile(params, reason, msgContainer, status) {
 async function handleDbExec(params, reason, msgContainer, status) {
   _pendingDbExec = params;
   status.remove();
+
   const proposal = document.createElement('div');
   proposal.className = 'message assistant';
-  proposal.innerHTML = `
-    <div style="margin-bottom:8px">Proposed database operation:</div>
-    <div style="font-size:12px;opacity:0.7;margin-bottom:12px">${reason}</div>
-    <div style="font-size:11px;background:#1a1a1a;padding:8px;border-radius:6px;margin-bottom:12px">
-      ${params.action} → ${params.action === 'sql' ? params.query : params.table}
-    </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="confirmDbExec(this)"
-        style="background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
-        Approve & Execute
-      </button>
-      <button onclick="this.closest('.message').remove()"
-        style="background:#333;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px">
-        Reject
-      </button>
-    </div>`;
+
+  const titleDiv = document.createElement('div');
+  titleDiv.style.marginBottom = '8px';
+  titleDiv.textContent = 'Proposed database operation:';
+
+  const reasonDiv = document.createElement('div');
+  reasonDiv.style.cssText = 'font-size:12px;opacity:0.7;margin-bottom:12px';
+  reasonDiv.textContent = reason;
+
+  const queryDiv = document.createElement('div');
+  queryDiv.style.cssText = 'font-size:11px;background:#1a1a1a;padding:8px;border-radius:6px;margin-bottom:12px';
+  queryDiv.textContent = `${params.action} → ${params.action === 'sql' ? params.query : params.table}`;
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px';
+
+  const approveBtn = document.createElement('button');
+  approveBtn.textContent = 'Approve & Execute';
+  approveBtn.style.cssText = 'background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer';
+
+  const rejectBtn = document.createElement('button');
+  rejectBtn.textContent = 'Reject';
+  rejectBtn.style.cssText = 'background:#333;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer';
+
+  approveBtn.addEventListener('click', async () => {
+    const p = _pendingDbExec;
+    if (!p) return;
+    approveBtn.textContent = 'Executing...';
+    approveBtn.disabled = true;
+    try {
+      if (p.action === 'sql') {
+        await agent.supabaseSQL(p.query);
+      } else {
+        await agent.supabaseExec(p.action, p.table, p);
+      }
+      proposal.innerHTML = 'Executed successfully.';
+      _pendingDbExec = null;
+    } catch(e) {
+      proposal.innerHTML = 'Execution failed: ' + e.message;
+    }
+  });
+
+  rejectBtn.addEventListener('click', () => {
+    _pendingDbExec = null;
+    proposal.remove();
+  });
+
+  btnRow.appendChild(approveBtn);
+  btnRow.appendChild(rejectBtn);
+  proposal.appendChild(titleDiv);
+  proposal.appendChild(reasonDiv);
+  proposal.appendChild(queryDiv);
+  proposal.appendChild(btnRow);
   msgContainer.appendChild(proposal);
   msgContainer.scrollTop = 999999;
 }
@@ -143,39 +206,5 @@ async function handleMultiStep(steps, reason, msgContainer, status) {
     } else if (step.tool === 'dbQuery') {
       await handleDbQuery(step.params, step.reason || reason, msgContainer, status);
     }
-  }
-}
-
-async function confirmAgentWrite(filePath, btn) {
-  const content = decodeURIComponent(btn.dataset.content);
-  const sha = btn.dataset.sha || null;
-  const msgEl = btn.closest('.message');
-  btn.textContent = 'Committing...';
-  btn.disabled = true;
-  try {
-    await agent.writeFile(filePath, content, `Agent: update ${filePath}`, sha);
-    msgEl.innerHTML = `Committed. ${filePath} updated successfully.`;
-  } catch(e) {
-    msgEl.innerHTML = `Commit failed: ${e.message}`;
-  }
-}
-
-async function confirmDbExec(btn) {
-  const params = _pendingDbExec;
-  if (!params) return;
-  const msgEl = btn.closest('.message');
-  btn.textContent = 'Executing...';
-  btn.disabled = true;
-  try {
-    let result;
-    if (params.action === 'sql') {
-      result = await agent.supabaseSQL(params.query);
-    } else {
-      result = await agent.supabaseExec(params.action, params.table, params);
-    }
-    msgEl.innerHTML = 'Executed successfully.';
-    _pendingDbExec = null;
-  } catch(e) {
-    msgEl.innerHTML = 'Execution failed: ' + e.message;
   }
 }
