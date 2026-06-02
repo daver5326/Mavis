@@ -313,3 +313,13 @@ async function switchToProject(name) {
     else addMessage('assistant', msg);
   }
 }
+function initEventListeners() {
+  document.getElementById('back-btn').addEventListener('click', backToDashboard);
+  document.getElementById('edit-thread-btn').addEventListener('click', openEditThread);
+  document.getElementById('close-new-thread-btn').addEventListener('click', closeNewThreadForm);
+  document.getElementById('save-new-thread-btn').addEventListener('click', saveNewThread);
+  document.getElementById('close-edit-thread-btn').addEventListener('click', closeEditThread);
+  document.getElementById('save-edit-thread-btn').addEventListener('click', saveEditThread);
+  document.getElementById('delete-thread-btn').addEventListener('click', deleteThread);
+  document.getElementById('close-card-btn').addEventListener('click', closeCardDetail);
+}
