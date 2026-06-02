@@ -37,6 +37,13 @@ export default async function handler(req, res) {
       });
     }
 
+    if (action === 'tree') {
+      const r = await fetch(`${BASE}/git/trees/${BRANCH}?recursive=1`, { headers: HEADERS });
+      if (!r.ok) throw new Error(`Tree failed: ${r.status}`);
+      const data = await r.json();
+      return res.status(200).json({ tree: data.tree });
+    }
+
     if (action === 'write') {
       if (!path || !content || !message) {
         return res.status(400).json({ error: 'path, content, message required' });
