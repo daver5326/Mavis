@@ -1,6 +1,13 @@
 // ─── CHAT.JS — Conversation engine ───────────────────────────────────────────
 
 const MAX_HISTORY_WINDOW = 10;
+const ROUTING_WORD_THRESHOLD = 6;
+
+function shouldAnalyzeForRouting(text) {
+  const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
+  if (agentTriggers.some(t => text.toLowerCase().startsWith(t))) return false;
+  return text.trim().split(/\s+/).length > ROUTING_WORD_THRESHOLD;
+}
 
 async function sendMessage(inputId) {
   const inputElId = inputId || (currentView === 'dashboard' ? 'dashboard-input' : 'chat-input');
@@ -30,7 +37,9 @@ async function sendMessage(inputId) {
     systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
     chatHistory.push({ role: 'user', content: text });
 
-    const routingPromise = analyzeAndRoute(text, threads);
+    const routingPromise = shouldAnalyzeForRouting(text)
+      ? analyzeAndRoute(text, threads)
+      : Promise.resolve(null);
 
     const thinking = document.createElement('div');
     thinking.className = 'message assistant thinking';
@@ -117,22 +126,7 @@ async function handleThreadUpdate(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // TODO (medium): move prompt to core/constants.js
-        system: `You are Mavis organizing information from David into the right project thread.
-Active threads:
-${threadList}
-Respond with ONLY valid JSON:
-{
-  "thread_id": <must be one of the IDs listed above>,
-  "thread_name": "<name of the matched thread>",
-  "updates": {
-    "Goal": "<updated goal or null if unchanged>",
-    "Next step": "<most important next action or null>",
-    "Decisions made": "<new decisions to append, or null>",
-    "Open question": "<new open questions to append, or null>",
-    "Current progress": "<concise summary of this session to append>"
-  }
-}`,
+        system: THREAD_UPDATE_PROMPT(threadList),
         messages: [{ role: 'user', content: text }]
       })
     });
@@ -155,6 +149,7 @@ Respond with ONLY valid JSON:
 
     const { error } = await updateThread(plan.thread_id, updates);
     if (error) throw new Error(error.message);
+    clearInsightCache(plan.thread_id);
     status.textContent = `Filed to "${plan.thread_name}" — updated.`;
     loadThreads();
 
