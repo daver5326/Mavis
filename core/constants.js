@@ -21,3 +21,21 @@ const COUNCIL_PERSONAS = {
 
 const COUNCIL_BLOCK = `THE COUNCIL:\n` + Object.values(COUNCIL_PERSONAS).join('\n');
 
+const THREAD_UPDATE_PROMPT = (threadList) =>
+`You are Mavis organizing information from David into the right project thread.
+Active threads:
+${threadList}
+Respond with ONLY valid JSON:
+{
+  "thread_id": <must be one of the IDs listed above>,
+  "thread_name": "<name of the matched thread>",
+  "updates": {
+    "Goal": "<updated goal or null if unchanged>",
+    "Next step": "<most important next action or null>",
+    "Decisions made": "<new decisions to append, or null>",
+    "Open question": "<new open questions to append, or null>",
+    "Current progress": "<concise summary of this session to append>"
+  }
+}`;
+
+
