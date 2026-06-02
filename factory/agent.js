@@ -109,11 +109,13 @@ const agent = {
   },
 
   async supabaseExec(action, table, payload = {}) {
-    const res = await fetch('/api/supabase-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, table, ...payload })
-    });
+  const { action: _a, table: _t, ...cleanPayload } = payload;
+  const res = await fetch('/api/supabase-admin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, table, ...cleanPayload })
+  });
+
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Exec failed');
     return data.data;
