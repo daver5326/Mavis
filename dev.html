@@ -760,7 +760,7 @@
 
       const { data, error } = await client
         .from('Threads')
-        .select('id, name, status, next_step, goal')
+        .select('id, "Thread name", "Status", "Next step", "Goal"')
         .order('last_activity_at', { ascending: false });
 
       if (error) throw error;
@@ -778,10 +778,10 @@
     }
     threadList.innerHTML = list.map(t => `
       <div class="drawer-thread-item ${t.id === activeThreadId ? 'active' : ''}"
-           data-id="${t.id}" data-name="${escHtml(t.name)}">
-        <div class="dt-name">${escHtml(t.name)}</div>
-        ${t.next_step ? `<div class="dt-meta">→ ${escHtml(t.next_step)}</div>` : ''}
-        <span class="dt-status ${(t.status||'active').toLowerCase()}">${t.status || 'Active'}</span>
+           data-id="${t.id}" data-name="${escHtml(t['Thread name'])}">
+        <div class="dt-name">${escHtml(t['Thread name'])}</div>
+        ${t['Next step'] ? `<div class="dt-meta">→ ${escHtml(t['Next step'])}</div>` : ''}
+        <span class="dt-status ${(t['Status']||'active').toLowerCase()}">${t['Status'] || 'Active'}</span>
       </div>
     `).join('');
 
@@ -836,8 +836,8 @@
     if (!thread) return;
     // Minimal board from thread data
     const zones = [
-      { zone: 'Goal',      text: thread.goal     || '—' },
-      { zone: 'Next Step', text: thread.next_step || '—' },
+      { zone: 'Goal',      text: thread['Goal']      || '—' },
+      { zone: 'Next Step', text: thread['Next step']  || '—' },
     ];
     boardCards.innerHTML = zones.map(z => `
       <div class="board-card-mini">
@@ -953,7 +953,7 @@
       system: `You are Mavis, a modular AI app factory assistant. 
 David Rogers is the President and sole creator, working phone-only.
 Current context: ${activeThreadId ? `Project "${activeThreadName}"` : 'Dashboard (cross-project)'}.
-Active threads: ${threads.map(t => t.name).join(', ') || 'none loaded'}.
+Active threads: ${threads.map(t => t['Thread name']).join(', ') || 'none loaded'}.
 Be direct, efficient, and treat every session as working time.`
     };
   }
@@ -963,7 +963,7 @@ Be direct, efficient, and treat every session as working time.`
     if (!threads.length) return;
     const lower = text.toLowerCase();
     const match = threads.find(t =>
-      lower.includes(t.name.toLowerCase()) && t.id !== activeThreadId
+      lower.includes((t['Thread name']||'').toLowerCase()) && t.id !== activeThreadId
     );
     if (match) {
       showRoutingBanner(match);
