@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-  /* ── TOKENS ──────────────────────────────────────────────────── */
+  /* ── TOKENS ──────────────────────────────────────────────── */
   :root {
     --cream:        #F5F0E8;
     --cream-deep:   #EDE7D9;
@@ -36,11 +36,12 @@
     --shadow-card: 0 1px 4px rgba(28,27,26,0.10);
   }
 
-  /* ── RESET ───────────────────────────────────────────────────── */
+  /* ── RESET ───────────────────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body {
     height: 100%;
+    height: -webkit-fill-available;
     overflow: hidden;
     background: var(--cream);
     color: var(--charcoal);
@@ -49,15 +50,16 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* ── LAYOUT SHELL ────────────────────────────────────────────── */
+  /* ── LAYOUT SHELL ────────────────────────────────────────── */
   #dev-shell {
     display: flex;
     height: 100vh;
+    height: -webkit-fill-available;
     position: relative;
     overflow: hidden;
   }
 
-  /* ── DRAWER ──────────────────────────────────────────────────── */
+  /* ── DRAWER ──────────────────────────────────────────────── */
   #dev-drawer {
     position: fixed;
     top: 0; left: 0;
@@ -72,7 +74,9 @@
     z-index: 200;
     box-shadow: var(--shadow-soft);
   }
-  #dev-drawer.open { transform: translateX(0); }
+  #dev-drawer.open {
+    transform: translateX(0);
+  }
 
   #drawer-header {
     display: flex;
@@ -88,8 +92,9 @@
     color: var(--charcoal);
     letter-spacing: -0.02em;
   }
-  .drawer-title span { color: var(--lavender); }
-
+  .drawer-title span {
+    color: var(--lavender);
+  }
   #drawer-close {
     background: none;
     border: none;
@@ -101,7 +106,10 @@
     border-radius: var(--radius-sm);
     transition: background 0.15s, color 0.15s;
   }
-  #drawer-close:hover { background: var(--cream-border); color: var(--charcoal); }
+  #drawer-close:hover {
+    background: var(--cream-border);
+    color: var(--charcoal);
+  }
 
   #drawer-section-label {
     font-size: 11px;
@@ -127,7 +135,9 @@
     transition: background 0.15s;
     margin-bottom: 2px;
   }
-  .drawer-thread-item:hover { background: var(--lavender-bg); }
+  .drawer-thread-item:hover {
+    background: var(--lavender-bg);
+  }
   .drawer-thread-item.active {
     background: var(--lavender-bg);
     border-left: 3px solid var(--lavender);
@@ -182,7 +192,7 @@
   }
   #new-thread-btn-dev:hover { background: #7A6FA8; }
 
-  /* ── OVERLAY ─────────────────────────────────────────────────── */
+  /* ── OVERLAY (behind drawer) ─────────────────────────────── */
   #drawer-overlay {
     display: none;
     position: fixed;
@@ -193,16 +203,18 @@
   }
   #drawer-overlay.visible { display: block; }
 
-  /* ── MAIN ────────────────────────────────────────────────────── */
+  /* ── MAIN CHAT AREA ──────────────────────────────────────── */
   #dev-main {
     flex: 1;
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: -webkit-fill-available;
     min-width: 0;
+    min-height: 0;
   }
 
-  /* ── HEADER ──────────────────────────────────────────────────── */
+  /* ── HEADER ──────────────────────────────────────────────── */
   #dev-header {
     height: var(--header-h);
     display: flex;
@@ -212,6 +224,7 @@
     background: var(--cream);
     border-bottom: 1px solid var(--cream-border);
     flex-shrink: 0;
+    position: relative;
   }
 
   #drawer-toggle {
@@ -226,7 +239,10 @@
     transition: background 0.15s, color 0.15s;
     flex-shrink: 0;
   }
-  #drawer-toggle:hover { background: var(--cream-deep); color: var(--charcoal); }
+  #drawer-toggle:hover {
+    background: var(--cream-deep);
+    color: var(--charcoal);
+  }
 
   #dev-context-label {
     flex: 1;
@@ -249,8 +265,11 @@
     letter-spacing: 0.04em;
   }
 
-  #dev-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
+  #dev-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
   .header-action-btn {
     background: none;
     border: 1px solid var(--cream-border);
@@ -268,7 +287,7 @@
     border-color: var(--charcoal-soft);
   }
 
-  /* ── MESSAGES ────────────────────────────────────────────────── */
+  /* ── MESSAGES ────────────────────────────────────────────── */
   #dev-messages {
     flex: 1;
     overflow-y: auto;
@@ -292,7 +311,7 @@
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  .dev-msg.user      { align-items: flex-end; }
+  .dev-msg.user { align-items: flex-end; }
   .dev-msg.assistant { align-items: flex-start; }
 
   .msg-bubble {
@@ -321,6 +340,7 @@
     padding: 0 4px;
   }
 
+  /* thinking pulse */
   .thinking-pulse {
     display: flex;
     gap: 5px;
@@ -344,7 +364,7 @@
     40%           { transform: scale(1.2); opacity: 1; }
   }
 
-  /* ── INPUT ───────────────────────────────────────────────────── */
+  /* ── INPUT AREA ──────────────────────────────────────────── */
   #dev-input-area {
     flex-shrink: 0;
     background: var(--cream);
@@ -440,7 +460,7 @@
     50%       { box-shadow: 0 0 0 8px rgba(192,87,74,0); }
   }
 
-  /* ── BOARD PANEL ─────────────────────────────────────────────── */
+  /* ── BOARD PANEL (slides up from bottom inside thread) ───── */
   #dev-board-panel {
     display: none;
     background: var(--cream-deep);
@@ -451,6 +471,8 @@
     flex-shrink: 0;
   }
   #dev-board-panel.visible { display: block; }
+  #dev-board-panel::-webkit-scrollbar { width: 4px; }
+  #dev-board-panel::-webkit-scrollbar-thumb { background: var(--cream-border); border-radius: 4px; }
 
   .board-panel-header {
     display: flex;
@@ -495,11 +517,11 @@
   }
   .bcm-text { color: var(--charcoal); line-height: 1.4; }
 
-  /* ── ROUTING BANNER ──────────────────────────────────────────── */
+  /* ── THREAD ROUTING BANNER ───────────────────────────────── */
   #routing-banner {
     display: none;
     position: fixed;
-    bottom: 130px;
+    bottom: calc(var(--input-area-h) + 16px);
     left: 50%;
     transform: translateX(-50%);
     background: var(--charcoal);
@@ -537,9 +559,10 @@
   #routing-dismiss {
     background: transparent !important;
     border: 1px solid rgba(255,255,255,0.3) !important;
+    margin-left: 4px;
   }
 
-  /* ── EMPTY STATE ─────────────────────────────────────────────── */
+  /* ── EMPTY STATE ─────────────────────────────────────────── */
   #dev-empty-state {
     flex: 1;
     display: flex;
@@ -557,7 +580,10 @@
     color: var(--charcoal);
     letter-spacing: -0.03em;
   }
-  .empty-wordmark em { color: var(--lavender); font-style: italic; }
+  .empty-wordmark em {
+    color: var(--lavender);
+    font-style: italic;
+  }
   .empty-sub {
     font-size: 15px;
     color: var(--charcoal-soft);
@@ -573,6 +599,7 @@
     border-radius: var(--radius-lg);
   }
 
+  /* ── UTIL ────────────────────────────────────────────────── */
   .hidden { display: none !important; }
 </style>
 </head>
@@ -580,8 +607,10 @@
 <body>
 <div id="dev-shell">
 
+  <!-- Drawer overlay -->
   <div id="drawer-overlay"></div>
 
+  <!-- Project Drawer -->
   <div id="dev-drawer">
     <div id="drawer-header">
       <div class="drawer-title">Mavis <span>Dev</span></div>
@@ -589,15 +618,17 @@
     </div>
     <div id="drawer-section-label">Projects</div>
     <div id="drawer-thread-list">
-      <div style="padding:16px;text-align:center;color:var(--charcoal-soft);font-size:13px;">Loading projects…</div>
+      <div style="padding: 16px; text-align:center; color: var(--charcoal-soft); font-size:13px;">Loading projects…</div>
     </div>
     <div id="drawer-footer">
       <button id="new-thread-btn-dev">+ New Project</button>
     </div>
   </div>
 
+  <!-- Main -->
   <div id="dev-main">
 
+    <!-- Header -->
     <div id="dev-header">
       <button id="drawer-toggle">☰</button>
       <div id="dev-context-label">
@@ -610,6 +641,7 @@
       </div>
     </div>
 
+    <!-- Board Panel (hidden by default) -->
     <div id="dev-board-panel">
       <div class="board-panel-header">
         <div class="board-panel-title">Project Board</div>
@@ -618,6 +650,7 @@
       <div class="board-cards-grid" id="board-cards-mini"></div>
     </div>
 
+    <!-- Messages -->
     <div id="dev-messages">
       <div id="dev-empty-state">
         <div class="empty-wordmark">Ma<em>v</em>is</div>
@@ -626,6 +659,7 @@
       </div>
     </div>
 
+    <!-- Input -->
     <div id="dev-input-area">
       <div id="dev-input-context"></div>
       <div class="dev-input-row">
@@ -637,15 +671,18 @@
       </div>
     </div>
 
-  </div>
-</div>
+  </div><!-- /dev-main -->
 
+</div><!-- /dev-shell -->
+
+<!-- Routing banner -->
 <div id="routing-banner">
   <span id="routing-banner-text"></span>
   <button id="routing-confirm">Go there</button>
   <button id="routing-dismiss">Stay here</button>
 </div>
 
+<!-- ── MODULES (same load order as index.html) ──────────────── -->
 <script src="core/constants.js"></script>
 <script src="core/memory.js"></script>
 <script src="core/context.js"></script>
@@ -664,13 +701,17 @@
 <script src="departments/self-modify.js"></script>
 <script src="main.js"></script>
 
+<!-- ── DEV UI LOGIC ─────────────────────────────────────────── -->
 <script>
 (function() {
 
+  // ── State ────────────────────────────────────────────────
   let activeThreadId   = null;
   let activeThreadName = 'Dashboard';
+  let isListening      = false;
   let threads          = [];
 
+  // ── DOM refs ─────────────────────────────────────────────
   const drawer         = document.getElementById('dev-drawer');
   const overlay        = document.getElementById('drawer-overlay');
   const drawerToggle   = document.getElementById('drawer-toggle');
@@ -695,6 +736,7 @@
   const foremanBtn     = document.getElementById('foreman-btn');
   const newThreadBtn   = document.getElementById('new-thread-btn-dev');
 
+  // ── Drawer ───────────────────────────────────────────────
   function openDrawer() {
     drawer.classList.add('open');
     overlay.classList.add('visible');
@@ -708,32 +750,24 @@
   drawerClose.addEventListener('click', closeDrawer);
   overlay.addEventListener('click', closeDrawer);
 
+  // ── Load threads ─────────────────────────────────────────
   async function loadThreadsIntoDrawer() {
     threadList.innerHTML = '<div style="padding:16px;text-align:center;color:var(--charcoal-soft);font-size:13px;">Loading…</div>';
     try {
-      const SUPABASE_URL = window.SUPABASE_URL || (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : null);
-      const SUPABASE_KEY = window.SUPABASE_ANON_KEY || (typeof SUPABASE_ANON_KEY !== 'undefined' ? SUPABASE_ANON_KEY : null);
-      if (!SUPABASE_URL || !SUPABASE_KEY) {
-        threadList.innerHTML = '<div style="padding:16px;color:var(--charcoal-soft);font-size:13px;">Waiting for Supabase init…</div>';
-        return;
-      }
-      const client = window.supabaseClient || window._supabase ||
-        (window.supabase && window.supabase.createClient
-          ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
-          : null);
-      if (!client) {
-        threadList.innerHTML = '<div style="padding:16px;color:var(--charcoal-soft);font-size:13px;">Supabase not ready yet.</div>';
-        return;
-      }
+      const SB_URL = 'https://jbsocnomwxodqyhiukcl.supabase.co';
+      const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impic29jbm9td3hvZHF5aGl1a2NsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjQ5NTUsImV4cCI6MjA5Mzg0MDk1NX0.ehX6AEqpSpVAF9Q3UxIabZXdZKLDqKKP9KL3pDIPhHE';
+      const client = window.supabase.createClient(SB_URL, SB_KEY);
+
       const { data, error } = await client
         .from('Threads')
         .select('id, name, status, next_step, goal')
         .order('last_activity_at', { ascending: false });
+
       if (error) throw error;
       threads = data || [];
       renderDrawerThreads(threads);
     } catch (e) {
-      threadList.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px;">Could not load: ${e.message}</div>`;
+      threadList.innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px;">Could not load projects: ${e.message}</div>`;
     }
   }
 
@@ -750,14 +784,18 @@
         <span class="dt-status ${(t.status||'active').toLowerCase()}">${t.status || 'Active'}</span>
       </div>
     `).join('');
+
     threadList.querySelectorAll('.drawer-thread-item').forEach(el => {
       el.addEventListener('click', () => {
-        switchToThread(el.dataset.id, el.dataset.name);
+        const id   = el.dataset.id;
+        const name = el.dataset.name;
+        switchToThread(id, name);
         closeDrawer();
       });
     });
   }
 
+  // ── Thread switching ─────────────────────────────────────
   function switchToThread(id, name) {
     activeThreadId   = id;
     activeThreadName = name;
@@ -766,9 +804,22 @@
     inputContext.textContent = `In: ${name}`;
     clearMessages();
     appendMessage('assistant', `Switched to <strong>${escHtml(name)}</strong>. What are we working on?`);
-    if (typeof openThread === 'function') { try { openThread(id); } catch(e) {} }
+    // Attempt to hand off to existing Mavis thread system if available
+    if (typeof openThread === 'function') {
+      try { openThread(id); } catch(e) {}
+    }
   }
 
+  function switchToDashboard() {
+    activeThreadId   = null;
+    activeThreadName = 'Dashboard';
+    ctxTitle.textContent = 'Mavis';
+    ctxMode.textContent  = 'Dashboard';
+    inputContext.textContent = '';
+    boardPanel.classList.remove('visible');
+  }
+
+  // ── Board panel ──────────────────────────────────────────
   boardToggleBtn.addEventListener('click', () => {
     if (boardPanel.classList.contains('visible')) {
       boardPanel.classList.remove('visible');
@@ -780,13 +831,15 @@
   closeBoardBtn.addEventListener('click', () => boardPanel.classList.remove('visible'));
 
   async function loadBoardCards(threadId) {
-    boardCards.innerHTML = '<div style="color:var(--charcoal-soft);font-size:13px;grid-column:1/-1">Loading…</div>';
+    boardCards.innerHTML = '<div style="color:var(--charcoal-soft);font-size:13px;grid-column:1/-1">Loading board…</div>';
     const thread = threads.find(t => t.id === threadId);
     if (!thread) return;
-    boardCards.innerHTML = [
-      { zone: 'Goal',      text: thread.goal      || '—' },
-      { zone: 'Next Step', text: thread.next_step  || '—' },
-    ].map(z => `
+    // Minimal board from thread data
+    const zones = [
+      { zone: 'Goal',      text: thread.goal     || '—' },
+      { zone: 'Next Step', text: thread.next_step || '—' },
+    ];
+    boardCards.innerHTML = zones.map(z => `
       <div class="board-card-mini">
         <div class="bcm-zone">${escHtml(z.zone)}</div>
         <div class="bcm-text">${escHtml(z.text)}</div>
@@ -794,11 +847,13 @@
     `).join('');
   }
 
+  // ── Foreman ──────────────────────────────────────────────
   foremanBtn.addEventListener('click', () => {
     appendMessage('user', '/foreman status');
     sendToMavis('/foreman status');
   });
 
+  // ── New thread ───────────────────────────────────────────
   newThreadBtn.addEventListener('click', () => {
     closeDrawer();
     const name = prompt('Project name?');
@@ -808,6 +863,7 @@
     }
   });
 
+  // ── Messaging ────────────────────────────────────────────
   function clearMessages() {
     emptyState.classList.add('hidden');
     messages.innerHTML = '';
@@ -837,6 +893,7 @@
     `;
     messages.appendChild(el);
     messages.scrollTop = messages.scrollHeight;
+    return el;
   }
 
   function removeThinking() {
@@ -844,6 +901,7 @@
     if (el) el.remove();
   }
 
+  // ── Send ─────────────────────────────────────────────────
   async function handleSend() {
     const text = textarea.value.trim();
     if (!text) return;
@@ -854,21 +912,29 @@
   }
 
   async function sendToMavis(text) {
+    // Check for thread routing signal
     checkRoutingSignal(text);
-    showThinking();
+
+    const thinking = showThinking();
+
     try {
+      // Route through existing Mavis send infrastructure if available
       if (activeThreadId && typeof sendMessage === 'function') {
+        // Hand off to existing chat.js sendMessage
         removeThinking();
         sendMessage(text, activeThreadId);
         return;
       }
+
+      // Fallback: direct Claude API call for dashboard-level messages
+      const context = await buildDevContext(text);
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: `You are Mavis, a modular AI app factory assistant. David Rogers is the President, working phone-only. Current context: ${activeThreadId ? `Project "${activeThreadName}"` : 'Dashboard'}. Active projects: ${threads.map(t=>t.name).join(', ')||'none'}. Be direct and efficient.`,
+          system: context.system,
           messages: [{ role: 'user', content: text }]
         })
       });
@@ -882,44 +948,79 @@
     }
   }
 
+  async function buildDevContext(userText) {
+    return {
+      system: `You are Mavis, a modular AI app factory assistant. 
+David Rogers is the President and sole creator, working phone-only.
+Current context: ${activeThreadId ? `Project "${activeThreadName}"` : 'Dashboard (cross-project)'}.
+Active threads: ${threads.map(t => t.name).join(', ') || 'none loaded'}.
+Be direct, efficient, and treat every session as working time.`
+    };
+  }
+
+  // ── Routing signal detection ─────────────────────────────
   function checkRoutingSignal(text) {
     if (!threads.length) return;
     const lower = text.toLowerCase();
-    const match = threads.find(t => lower.includes(t.name.toLowerCase()) && t.id !== activeThreadId);
-    if (match) showRoutingBanner(match);
+    const match = threads.find(t =>
+      lower.includes(t.name.toLowerCase()) && t.id !== activeThreadId
+    );
+    if (match) {
+      showRoutingBanner(match);
+    }
   }
 
   function showRoutingBanner(thread) {
     routingText.textContent = `This looks like ${thread.name} territory.`;
     routingBanner.classList.add('visible');
-    routingConfirm.onclick = () => { routingBanner.classList.remove('visible'); switchToThread(thread.id, thread.name); };
-    routingDismiss.onclick = () => routingBanner.classList.remove('visible');
+    routingConfirm.onclick = () => {
+      routingBanner.classList.remove('visible');
+      switchToThread(thread.id, thread.name);
+    };
+    routingDismiss.onclick = () => {
+      routingBanner.classList.remove('visible');
+    };
     setTimeout(() => routingBanner.classList.remove('visible'), 8000);
   }
 
+  // ── Auto-resize textarea ─────────────────────────────────
   textarea.addEventListener('input', () => {
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 140) + 'px';
   });
+
   textarea.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   });
+
   sendBtn.addEventListener('click', handleSend);
 
+  // ── Voice ─────────────────────────────────────────────────
   micBtn.addEventListener('click', () => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    if (typeof startVoiceInput === 'function') {
+      startVoiceInput(text => { textarea.value = text; handleSend(); });
+    } else if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SR();
       recognition.lang = 'en-US';
-      recognition.onstart  = () => micBtn.classList.add('listening');
-      recognition.onend    = () => micBtn.classList.remove('listening');
-      recognition.onresult = e => { textarea.value = e.results[0][0].transcript; handleSend(); };
+      recognition.onstart = () => micBtn.classList.add('listening');
+      recognition.onend   = () => micBtn.classList.remove('listening');
+      recognition.onresult = e => {
+        textarea.value = e.results[0][0].transcript;
+        handleSend();
+      };
       recognition.start();
     }
   });
 
+  // ── Utility ───────────────────────────────────────────────
   function escHtml(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function mdToHtml(text) {
@@ -930,6 +1031,8 @@
       .replace(/\n/g, '<br>');
   }
 
+  // ── Init ─────────────────────────────────────────────────
+  // Load threads after a short delay to let main.js init Supabase
   setTimeout(loadThreadsIntoDrawer, 1200);
 
 })();
