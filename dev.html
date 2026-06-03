@@ -631,6 +631,7 @@
     <!-- Header -->
     <div id="dev-header">
       <button id="drawer-toggle">☰</button>
+      <button id="back-to-dash" style="display:none;background:none;border:1px solid var(--cream-border);cursor:pointer;color:var(--charcoal-soft);font-size:12px;padding:5px 10px;border-radius:8px;font-family:'DM Sans',sans-serif;flex-shrink:0;">← Dash</button>
       <div id="dev-context-label">
         <div class="ctx-title" id="ctx-title-text">Mavis</div>
         <div class="ctx-mode" id="ctx-mode-text">Dashboard</div>
@@ -703,6 +704,7 @@
 
 <!-- ── DEV UI LOGIC ─────────────────────────────────────────── -->
 <script>
+document.addEventListener('DOMContentLoaded', function() {
 (function() {
 
   // ── State ────────────────────────────────────────────────
@@ -749,6 +751,7 @@
   drawerToggle.addEventListener('click', openDrawer);
   drawerClose.addEventListener('click', closeDrawer);
   overlay.addEventListener('click', closeDrawer);
+  document.getElementById('back-to-dash').addEventListener('click', switchToDashboard);
 
   // ── Load threads ─────────────────────────────────────────
   async function loadThreadsIntoDrawer() {
@@ -802,12 +805,9 @@
     ctxTitle.textContent = name;
     ctxMode.textContent  = 'Project';
     inputContext.textContent = `In: ${name}`;
+    document.getElementById('back-to-dash').style.display = 'inline';
     clearMessages();
     appendMessage('assistant', `Switched to <strong>${escHtml(name)}</strong>. What are we working on?`);
-    // Attempt to hand off to existing Mavis thread system if available
-    if (typeof openThread === 'function') {
-      try { openThread(id); } catch(e) {}
-    }
   }
 
   function switchToDashboard() {
@@ -817,6 +817,9 @@
     ctxMode.textContent  = 'Dashboard';
     inputContext.textContent = '';
     boardPanel.classList.remove('visible');
+    document.getElementById('back-to-dash').style.display = 'none';
+    clearMessages();
+    emptyState.classList.remove('hidden');
   }
 
   // ── Board panel ──────────────────────────────────────────
@@ -912,50 +915,26 @@
   }
 
   async function sendToMavis(text) {
-    // Check for thread routing signal
     checkRoutingSignal(text);
-
-    const thinking = showThinking();
-
+    showThinking();
     try {
-      // Route through existing Mavis send infrastructure if available
-      if (activeThreadId && typeof sendMessage === 'function') {
-        // Hand off to existing chat.js sendMessage
-        removeThinking();
-        sendMessage(text, activeThreadId);
-        return;
-      }
-
-      // Fallback: direct Claude API call for dashboard-level messages
-      const context = await buildDevContext(text);
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const system = `You are Mavis, a modular AI app factory assistant. David Rogers is the President and sole creator, working phone-only. Current context: ${activeThreadId ? `Project "${activeThreadName}"` : 'Dashboard (cross-project)'}. Active projects: ${threads.map(t => t['Thread name']).join(', ') || 'none'}. Be direct, efficient. No markdown, no bullet points. Treat every session as working time.`;
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system: context.system,
+          system,
           messages: [{ role: 'user', content: text }]
         })
       });
       const data = await res.json();
       removeThinking();
-      const reply = data.content?.find(b => b.type === 'text')?.text || 'No response.';
+      const reply = data.content?.find(b => b.type === 'text')?.text || data.error || 'No response.';
       appendMessage('assistant', mdToHtml(reply));
     } catch (e) {
       removeThinking();
       appendMessage('assistant', `<span style="color:var(--danger)">Error: ${escHtml(e.message)}</span>`);
     }
-  }
-
-  async function buildDevContext(userText) {
-    return {
-      system: `You are Mavis, a modular AI app factory assistant. 
-David Rogers is the President and sole creator, working phone-only.
-Current context: ${activeThreadId ? `Project "${activeThreadName}"` : 'Dashboard (cross-project)'}.
-Active threads: ${threads.map(t => t['Thread name']).join(', ') || 'none loaded'}.
-Be direct, efficient, and treat every session as working time.`
-    };
   }
 
   // ── Routing signal detection ─────────────────────────────
@@ -1032,10 +1011,10 @@ Be direct, efficient, and treat every session as working time.`
   }
 
   // ── Init ─────────────────────────────────────────────────
-  // Load threads after a short delay to let main.js init Supabase
-  setTimeout(loadThreadsIntoDrawer, 1200);
+  setTimeout(loadThreadsIntoDrawer, 500);
 
 })();
+}); // DOMContentLoaded
 </script>
 
 </body>
