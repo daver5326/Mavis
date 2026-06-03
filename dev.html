@@ -919,7 +919,7 @@ document.addEventListener('DOMContentLoaded', function() {
     showThinking();
     try {
       const system = `You are Mavis, a modular AI app factory assistant. David Rogers is the President and sole creator, working phone-only. Current context: ${activeThreadId ? `Project "${activeThreadName}"` : 'Dashboard (cross-project)'}. Active projects: ${threads.map(t => t['Thread name']).join(', ') || 'none'}. Be direct, efficient. No markdown, no bullet points. Treat every session as working time.`;
-      const res = await fetch('https://mavis-umber.vercel.app/api/chat', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
