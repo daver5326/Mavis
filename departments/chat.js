@@ -34,7 +34,8 @@ async function sendMessage(inputId) {
     let repoMap = window._cachedRepoMap || null;
     agent.mapRepo().then(map => { window._cachedRepoMap = map; }).catch(() => {});
 
-    systemContext = buildMasterContext(threads, window._recentSessions || [], repoMap);
+    // DIAGNOSTIC: bypass buildMasterContext temporarily
+    systemContext = 'You are Mavis, an AI app factory assistant. Be direct and helpful.';
     chatHistory.push({ role: 'user', content: text });
 
     const routingPromise = shouldAnalyzeForRouting(text)
