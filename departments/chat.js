@@ -24,6 +24,7 @@ async function sendMessage(inputId) {
     const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
     const isAgentCall = agentTriggers.some(t => text.toLowerCase().startsWith(t));
     if (isAgentCall) { handleAgentAction(text); return; }
+    if (text.toLowerCase().startsWith('/council')) { runCouncilHuddle(); return; }
 
     if (detectIntent(text) === 'threadUpdate') { handleThreadUpdate(text); return; }
     if (detectIntent(text) === 'newProject') { handleNewProjectRequest(text); return; }
