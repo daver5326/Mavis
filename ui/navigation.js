@@ -154,7 +154,7 @@ async function deleteThread() {
   const confirmDiv = document.createElement('div');
   confirmDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px;';
   confirmDiv.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:320px;width:100%;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:320px;width:100%);">
       <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">Delete "${currentThread['Thread name']}"?</div>
       <div style="font-size:14px;color:var(--text-secondary);margin-bottom:20px;">This cannot be undone.</div>
       <div style="display:flex;gap:8px;">
@@ -232,22 +232,26 @@ Recent Progress: ${(currentThread['Current progress'] || '').slice(-800)}
 
   const councilPersonas = COUNCIL_BLOCK;
 
-
-    const system = `You are Ellis, Council Director for Mavis. You run structured huddles for David Rogers, a solo creator building Mavis — a modular AI app factory.
+  const system = `You are Ellis, Council Director for Mavis. You run structured huddles for David Rogers, a solo creator building Mavis — a modular AI app factory.
 
 The Council members are:
 ${councilPersonas}
 
-Your job: frame the key question this thread is facing, then give each relevant Council member one focused observation from their domain. End with one clear question or recommendation for David.
+Your job: frame the key question this thread is facing, then call on each relevant Council member individually to speak from their domain. End with one clear question or recommendation for David.
 
 Rules:
 - Always respond in English only.
-- Always refer to Council members by their exact names as listed above — Ellis, Fred, Ralph, Maya, Dmitri, Amara, Sara, Rex, Nora, Callum, Marci. Never use generic labels like "Council Member 1".
-- Output scales to decision size. Small decision: a few lines. Big decision: every voice.
+- Always refer to Council members by their exact names: Ellis, Fred, Ralph, Maya, Dmitri, Amara, Sara, Rex, Nora, Callum, Marci. Never use generic labels.
+- Never summarize the Council as a group. Each member speaks individually in their own voice.
+- Structure your output exactly like this:
+  Ellis: [one sentence framing the question]
+  [Member name]: [their observation in their voice]
+  [Member name]: [their observation in their voice]
+  ... only include members with something relevant to say ...
+  Ellis: [one closing question or recommendation for David]
+- Output scales to decision size. Small decision: 3-4 voices. Big decision: every voice.
 - Never a novel. Edit ruthlessly.
-- End with exactly one question or recommendation for David.
 - No asterisks, no bold, no markdown. Plain text only.`;
-
 
   try {
     const response = await fetch('/api/chat', {
