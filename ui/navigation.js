@@ -213,9 +213,65 @@ async function switchToProject(name) {
   }
 }
 
+// ─── COUNCIL HUDDLE ──────────────────────────────────────────────────────────
+
+async function runCouncilHuddle() {
+  if (!currentThread) return;
+
+  addMessage('assistant', 'Ellis: Calling the huddle. One moment.');
+
+  const threadContext = `
+Thread: ${currentThread['Thread name']}
+Goal: ${currentThread['Goal'] || 'Not set'}
+Status: ${currentThread['Status'] || 'Active'}
+Next Step: ${currentThread['Next step'] || 'Not set'}
+Decisions Made: ${currentThread['Decisions made'] || 'None'}
+Open Questions: ${currentThread['Open question'] || 'None'}
+Recent Progress: ${(currentThread['Current progress'] || '').slice(-800)}
+  `.trim();
+
+  const councilPersonas = window._councilPersonas || '';
+
+  const system = `You are Ellis, Council Director for Mavis. You run structured huddles for David Rogers, a solo creator building Mavis — a modular AI app factory.
+
+The Council members are:
+${councilPersonas}
+
+Your job: frame the key question this thread is facing, give each relevant Council member one focused observation from their domain, name any agreements or disagreements, and end with one clear question or recommendation for David.
+
+Rules:
+- Output scales to decision size. Small decision: a few lines. Big decision: every voice.
+- Never a novel. Edit ruthlessly.
+- End with exactly one question or recommendation for David.
+- No markdown. Plain text only.`;
+
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system,
+        messages: [{
+          role: 'user',
+          content: `Current thread context:\n${threadContext}\n\nRecent conversation:\n${chatHistory.slice(-6).map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n')}`
+        }]
+      })
+    });
+    const data = await response.json();
+    if (data.content && data.content[0]) {
+      addMessage('assistant', data.content[0].text.trim());
+    }
+  } catch(e) {
+    addMessage('assistant', 'Council huddle failed: ' + e.message);
+  }
+}
+
+// ─── EVENT LISTENERS ─────────────────────────────────────────────────────────
+
 function initEventListeners() {
   document.getElementById('back-btn').addEventListener('click', backToDashboard);
   document.getElementById('edit-thread-btn').addEventListener('click', openEditThread);
+  document.getElementById('council-btn').addEventListener('click', runCouncilHuddle);
   document.getElementById('close-new-thread-btn').addEventListener('click', closeNewThreadForm);
   document.getElementById('save-new-thread-btn').addEventListener('click', saveNewThread);
   document.getElementById('close-edit-thread-btn').addEventListener('click', closeEditThread);
