@@ -230,7 +230,8 @@ Open Questions: ${currentThread['Open question'] || 'None'}
 Recent Progress: ${(currentThread['Current progress'] || '').slice(-800)}
   `.trim();
 
-  const councilPersonas = window._councilPersonas || '';
+  const councilPersonas = COUNCIL_BLOCK;
+
 
   const system = `You are Ellis, Council Director for Mavis. You run structured huddles for David Rogers, a solo creator building Mavis — a modular AI app factory.
 
