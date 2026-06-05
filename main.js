@@ -19,10 +19,9 @@ window.addEventListener('visibilitychange', async () => {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   initVoice();
-    initEventListeners();
-
+  initEventListeners();
 
   document.getElementById('send-btn').addEventListener('click', () => sendMessage('chat-input'));
   document.getElementById('chat-input').addEventListener('keypress', function(e) {
@@ -34,9 +33,17 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('new-thread-btn').addEventListener('click', openNewThreadForm);
 
-  loadDavidProfile().then(() => {
-    loadThreads().then(() => {
-      setTimeout(greetOnLoad, 800);
-    });
-  });
+  // ── Ralph runs first. Nothing boots until he's done. ─────────────────────
+  window._sessionLog = [];
+  const ralphStatus = await ralph.wakeUp();
+
+  if (ralphStatus.newDay) {
+    const brief = ralph.getBrief();
+    console.log('Ralph brief (new day):', brief);
+  }
+
+  // ── Normal boot sequence ──────────────────────────────────────────────────
+  await loadDavidProfile();
+  await loadThreads();
+  setTimeout(greetOnLoad, 800);
 });
