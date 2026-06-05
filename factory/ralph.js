@@ -12,6 +12,7 @@ const ralph = {
     try {
       await Promise.all([
         this.fetchLivingDocSummary(),
+        this.fetchCouncilPersonas(),
         this.fetchRecentSessions(),
         this.fetchRepoMap(),
         this.fetchDavidProfile(),
@@ -49,6 +50,29 @@ const ralph = {
     } catch(e) {
       console.error('Ralph: living doc summary fetch failed', e);
       window._livingDocSummary = '';
+    }
+  },
+
+  // ─── FETCH COUNCIL PERSONAS ──────────────────────────────────────────────
+
+  async fetchCouncilPersonas() {
+    try {
+      const res = await fetch('/api/supabase-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'select',
+          table: 'mavis_config',
+          filters: { key: 'council_personas' }
+        })
+      });
+      const data = await res.json();
+      window._councilPersonas = data.data && data.data[0]
+        ? data.data[0].value
+        : '';
+    } catch(e) {
+      console.error('Ralph: council personas fetch failed', e);
+      window._councilPersonas = '';
     }
   },
 
@@ -155,6 +179,7 @@ const ralph = {
       lastSessionSummary: lastSession ? lastSession.summary : null,
       lastSessionDate: lastSession ? lastSession.created_at : null,
       livingDocLoaded: !!window._livingDocSummary,
+      councilPersonasLoaded: !!window._councilPersonas,
       repoMapLoaded: !!window._repoMap && Object.keys(window._repoMap).length > 0,
       davidProfileLoaded: !!window._davidProfile && Object.keys(window._davidProfile).length > 0
     };
