@@ -392,3 +392,14 @@ textarea.form-input { min-height: 80px; resize: vertical; }
 .triage-action-sub { font-size: 12px; color: var(--text-secondary); display: block; }
 
 .loading { color: var(--text-secondary); font-size: 13px; padding: 8px 0; }
+
+/* ── THREAD TOP BAR ── */
+#thread-view .top-bar {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+#thread-view .thread-title-text {
+  flex: 1;
+  text-align: center;
+}
