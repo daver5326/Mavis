@@ -1,43 +1,28 @@
 // ─── ROUTER.JS — Intent detection and routing ─────────────────────────────────
 
-const INTENTS = {
-  selfModify: [
-    'update yourself', 'modify yourself', 'change your code', 'update your code',
-    'rewrite yourself', 'update mavis code', 'change mavis', 'modify mavis',
-    'update the app', 'change the app', 'fix the app', 'improve the app',
-    'add to yourself', 'update app.js'
-  ],
-  build: [
-    'build', 'create', 'add a', 'i want to track', 'make a', 'new feature',
-    'can you build', 'can mavis build', 'add feature', 'i need a'
-  ],
-  update: [
-    'update mavis', 'file this', 'save this to', 'add this to', 'put this in',
-    'log this to', 'store this in', 'session summary', 'update my thread', 'update thread'
-  ],
-  newProject: [
-    'new project', 'new app', 'new repo', 'create a project', 'create an app',
-    'start a project', 'start an app', 'launch a project', 'launch an app',
-    'scaffold', 'new external'
-  ],
-  agentRead: [
-    'read your', 'show me your', 'look at your', 'open your', 'check your',
-    'what is in your', "what's in your", 'read the file', 'show me the file',
-    'use your agent to read', 'agent read'
-  ],
-  agentWrite: [
-    'use your agent to', 'agent write', 'agent update', 'agent fix',
-    'update the file', 'write to', 'commit this', 'push this change',
-    'strengthen', 'improve the instruction', 'fix the instruction',
-    'change the instruction', 'update the instruction'
-  ]
-};
+async function detectIntent(text) {
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        system: `You are an intent classifier. Classify the user's message into exactly one of these intents:
 
-function detectIntent(text) {
-  const lower = text.toLowerCase();
-  for (const [intent, triggers] of Object.entries(INTENTS)) {
-    if (triggers.some(t => lower.includes(t))) return intent;
-  }
+- build_request: they want to change, fix, improve, or build anything visual or functional
+- thread_update: they want to file, save, log, or update project information
+- new_project: they want to start a new project or app
+- chat: anything else — questions, thinking out loud, conversation
+
+Respond with ONLY one of these exact strings: build_request, thread_update, new_project, chat`,
+        messages: [{ role: 'user', content: text }]
+      })
+    });
+    const data = await response.json();
+    if (data.content && data.content[0]) {
+      return data.content[0].text.trim();
+    }
+  } catch(e) {}
   return 'chat';
 }
 
@@ -76,7 +61,6 @@ Respond with ONLY valid JSON.`,
   return null;
 }
 
-// ── Agent action planner — asks Claude what file to touch and how ─────────────
 async function planAgentAction(text, repoMap) {
   try {
     const response = await fetch('/api/chat', {
