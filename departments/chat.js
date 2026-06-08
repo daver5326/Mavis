@@ -74,6 +74,14 @@ async function sendMessage(inputId) {
        if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
        chatHistory.push({ role: 'assistant', content: reply });
        speak(reply);
+
+       // ── If Mavis proposed something, show Make it so ──────────────────
+       const proposalKeywords = ['fred', 'update', 'modify', 'change', 'add', 'build', 'deploy', 'push'];
+       const lowerReply = reply.toLowerCase();
+       const soundsLikeProposal = proposalKeywords.filter(k => lowerReply.includes(k)).length >= 2;
+       if (soundsLikeProposal) {
+         showMakeItSoButton(`${text} — ${reply.slice(0, 200)}`);
+       }
      }
 
      if (routing && (routing.route || routing.suggest_new)) {
