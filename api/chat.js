@@ -11,12 +11,13 @@ export default async function handler(req, res) {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31'
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 8000,
-        system: system,
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: messages
       })
     });
