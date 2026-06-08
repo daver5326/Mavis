@@ -40,7 +40,7 @@ async function sendMessage(inputId) {
       repoMap
     );
 
-    systemContext = 'You are Mavis, an AI app factory assistant. Be direct and helpful.';
+    
     chatHistory.push({ role: 'user', content: text });
 
     const routingPromise = shouldAnalyzeForRouting(text)
