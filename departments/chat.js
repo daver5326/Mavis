@@ -31,8 +31,7 @@ async function sendMessage(inputId) {
 
     // ── Regular chat ──────────────────────────────────────────────────────
     const threads = await fetchAllThreads();
-
-        const repoMap = window._repoMap || null;
+    const repoMap = window._repoMap || null;
 
     systemContext = buildMasterContext(
       threads,
@@ -40,7 +39,6 @@ async function sendMessage(inputId) {
       repoMap
     );
 
-    
     chatHistory.push({ role: 'user', content: text });
 
     const routingPromise = shouldAnalyzeForRouting(text)
@@ -68,7 +66,14 @@ async function sendMessage(inputId) {
       const data = await chatResponse.json();
 
       if (data.content && data.content[0]) {
-        const reply = data.content[0].text;
+        const reply = data.content[0].text.trim();
+        try {
+          const parsed = JSON.parse(reply);
+          if (parsed.build_request) {
+            handleAgentAction(parsed.instruction);
+            return;
+          }
+        } catch(e) {}
         showDashboardMessage('assistant', reply);
         if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
         chatHistory.push({ role: 'assistant', content: reply });
