@@ -6,7 +6,6 @@ const ROUTING_WORD_THRESHOLD = 6;
 function shouldAnalyzeForRouting(text) {
  const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
  if (agentTriggers.some(t => text.toLowerCase().startsWith(t))) return false;
- if (['selfModify', 'agentWrite', 'build'].includes(detectIntent(text))) return false;
  return text.trim().split(/\s+/).length > ROUTING_WORD_THRESHOLD;
 }
 
@@ -21,15 +20,17 @@ async function sendMessage(inputId) {
    showDashboardMessage('user', text);
    if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
-   // ── Explicit agent trigger ────────────────────────────────────────────
+   // ── Explicit triggers ─────────────────────────────────────────────────
    const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
    const isAgentCall = agentTriggers.some(t => text.toLowerCase().startsWith(t));
    if (isAgentCall) { handleAgentAction(text); return; }
    if (text.toLowerCase().startsWith('/council')) { runCouncilHuddle(); return; }
 
-   if (detectIntent(text) === 'threadUpdate') { handleThreadUpdate(text); return; }
-   if (detectIntent(text) === 'newProject') { handleNewProjectRequest(text); return; }
-   if (['selfModify', 'agentWrite', 'build'].includes(detectIntent(text))) { handleAgentAction(text); return; }
+   // ── LLM intent classification ─────────────────────────────────────────
+   const intent = await detectIntent(text);
+   if (intent === 'thread_update') { handleThreadUpdate(text); return; }
+   if (intent === 'new_project') { handleNewProjectRequest(text); return; }
+   if (intent === 'build_request') { handleAgentAction(text); return; }
 
    // ── Regular chat ──────────────────────────────────────────────────────
    const threads = await fetchAllThreads();
@@ -69,13 +70,6 @@ async function sendMessage(inputId) {
 
      if (data.content && data.content[0]) {
        const reply = data.content[0].text.trim();
-       try {
-         const parsed = JSON.parse(reply);
-         if (parsed.build_request) {
-           handleAgentAction(parsed.instruction);
-           return;
-         }
-       } catch(e) {}
        showDashboardMessage('assistant', reply);
        if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
        chatHistory.push({ role: 'assistant', content: reply });
