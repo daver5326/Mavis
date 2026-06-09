@@ -1,11 +1,11 @@
-// ─── FOREMAN.JS — Pattern observer, health monitor, shop foreman ─────────────
+// ─── FRED.JS — Pattern observer, health monitor, shop foreman ─────────────
 
-const foreman = {
+const fred = {
 
   log: [],
   sessionStart: new Date().toISOString(),
 
-  // ─── OBSERVE ───────────────────────────────────────────────────────────[...]
+  // ─── OBSERVE ──────────────────────────────────────────────────────────────
 
   observe(event) {
     this.log.push({ event, timestamp: new Date().toISOString() });
@@ -20,7 +20,7 @@ const foreman = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system: `You are the Mavis Foreman. You observe how David works — not just what he builds, but how he thinks, decides, and moves. Write a brief session report with three parts: (1) SUMMARY[...]
+          system: `You are the Mavis Foreman. You observe how David works — not just what he builds, but how he thinks, decides, and moves. Write a brief session report with three parts: (1) SUMMARY: 2-3 sentences on what was accomplished. (2) PATTERNS: one observation about how David worked today — his energy, decisions, focus, or blocks. (3) NEXT: the single most important thing to do next session. Be direct. No padding.`,
           messages: [{
             role: 'user',
             content: `Session log:\n${sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 3000)}`
@@ -51,7 +51,7 @@ const foreman = {
 
       await this.patchColdStartDoc(report);
 
-    } catch(e) { console.error('Foreman session report error:', e); }
+    } catch(e) { console.error('Fred session report error:', e); }
   },
 
   // ─── PATCH COLD START DOC ────────────────────────────────────────────────
@@ -76,7 +76,7 @@ const foreman = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system: `You are the Mavis Foreman. You have the current cold start document and a session summary. Update ONLY these three sections based on the session: CURRENT SYSTEM STATE, BUILD LOG, an[...]
+          system: `You are the Mavis Foreman. You have the current cold start document and a session summary. Update ONLY these three sections based on the session: CURRENT SYSTEM STATE, BUILD LOG, and OPEN QUESTIONS PARKED. Return the complete updated document. No explanation.`,
           messages: [{
             role: 'user',
             content: `Current document:\n${currentDoc.slice(0, 8000)}\n\nSession summary:\n${sessionSummary}`
@@ -97,7 +97,7 @@ const foreman = {
           data: { key: 'cold_start_document', value: updatedDoc }
         })
       });
-    } catch(e) { console.error('Foreman cold start patch error:', e); }
+    } catch(e) { console.error('Fred cold start patch error:', e); }
   },
 
   // ─── COMMANDMENT HEALTH CHECK ────────────────────────────────────────────
@@ -125,7 +125,7 @@ const foreman = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system: `You are the Mavis Foreman conducting a health check. Review these files against these commandments: (1) Single responsibility per file. (2) Modern agentic best practices. (3) Platfo[...]
+          system: `You are the Mavis Foreman conducting a health check. Review these files against these commandments: (1) Single responsibility per file. (2) Modern agentic best practices. (3) Platform and LLM agnostic. (4) Propose, don't act. (5) No corners painted. (6) Factory builds itself. (7) More agentic. (8) Watch cost. (9) Professional code only. (10) Verify before proposing. (11) Token efficiency. (12) Factory audits itself. (13) Verify the full stack. Return JSON: { "health": "green|yellow|red", "findings": ["..."], "recommended_actions": ["..."] }`,
           messages: [{
             role: 'user',
             content: fileContents.join('\n\n---\n\n')
@@ -154,7 +154,7 @@ const foreman = {
 
       return findings;
     } catch(e) {
-      console.error('Foreman health check error:', e);
+      console.error('Fred health check error:', e);
       return null;
     }
   },
@@ -196,7 +196,7 @@ const foreman = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system: `You are the Mavis Foreman. You have summaries of recent sessions. Surface one insight David hasn't explicitly noticed — a pattern, a risk, or an opportunity. One sentence. Direct.[...]
+          system: `You are the Mavis Foreman. You have summaries of recent sessions. Surface one insight David hasn't explicitly noticed — a pattern, a risk, or an opportunity. One sentence. Direct.`,
           messages: [{
             role: 'user',
             content: `Recent session summaries:\n${recentSummaries}`
@@ -232,7 +232,7 @@ const foreman = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system: `You are the Mavis Foreman. Based on patterns across sessions, identify if there is a project David should start that he hasn't named yet. If yes, return JSON: {"name": "", "goal": "[...]
+          system: `You are the Mavis Foreman. Based on patterns across sessions, identify if there is a project David should start that he hasn't named yet. If yes, return JSON: {"name": "", "goal": "", "why_now": ""}. If no clear project emerges, return {"name": null}.`,
           messages: [{ role: 'user', content: `Session summaries:\n${summaries}` }]
         })
       });
