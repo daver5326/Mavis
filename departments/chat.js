@@ -176,9 +176,9 @@ async function handleThreadUpdate(text) {
 async function endSession() {
  if (!window._sessionLog || window._sessionLog.length < 2) return;
  try {
-   await foreman.writeSessionReport(window._sessionLog);
-   const insight = await foreman.surface();
-   if (insight) showDashboardMessage('assistant', `Foreman: ${insight}`);
+   await fred.writeSessionReport(window._sessionLog);
+   const insight = await fred.surface();
+   if (insight) showDashboardMessage('assistant', `Fred: ${insight}`);
  } catch(e) { console.error('endSession error:', e); }
  window._sessionLog = [];
 }
