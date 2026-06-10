@@ -6,9 +6,6 @@ let systemContext = '';
 let currentView = 'dashboard';
 let pendingRoute = null;
 
-
-});
-
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 window.addEventListener('DOMContentLoaded', async () => {
