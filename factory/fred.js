@@ -29,6 +29,7 @@ const fred = {
         })
       });
       const data = await response.json();
+      console.error('FRED DEBUG:', JSON.stringify(data).slice(0, 500));
       if (!data.content || !data.content[0]) return;
 
       const report = data.content[0].text.trim();
