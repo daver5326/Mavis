@@ -19,6 +19,7 @@ const fred = {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
+        keepalive: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           system: `You are the Mavis Foreman. You observe how David works — not just what he builds, but how he thinks, decides, and moves. Write a brief session report with three parts: (1) SUMMARY: 2-3 sentences on what was accomplished. (2) PATTERNS: one observation about how David worked today — his energy, decisions, focus, or blocks. (3) NEXT: the single most important thing to do next session. Be direct. No padding.`,
@@ -29,7 +30,6 @@ const fred = {
         })
       });
       const data = await response.json();
-      console.error('FRED DEBUG:', JSON.stringify(data).slice(0, 500));
       if (!data.content || !data.content[0]) return;
 
       const report = data.content[0].text.trim();
@@ -37,6 +37,7 @@ const fred = {
 
       await fetch('/api/supabase-admin', {
         method: 'POST',
+        keepalive: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'insert',
