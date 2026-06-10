@@ -5,19 +5,33 @@ export default async function handler(req, res) {
 
   const { messages, system } = req.body;
 
+  // Prompt caching requires minimum ~1024 tokens. Short system prompts
+  // (internal Fred/Ralph calls) should not use cache_control.
+  const CACHE_MIN_CHARS = 4000;
+  const useCache = system && system.length > CACHE_MIN_CHARS;
+
+  const systemBlock = useCache
+    ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+    : system;
+
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.CLAUDE_API_KEY,
+      'anthropic-version': '2023-06-01'
+    };
+
+    if (useCache) {
+      headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31'
-      },
+      headers,
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 8000,
-        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+        system: systemBlock,
         messages: messages
       })
     });
