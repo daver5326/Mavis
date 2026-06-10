@@ -206,3 +206,9 @@ async function saveIdea(transcript) {
  if (error) addMessage('assistant', 'Error saving idea: ' + error.message);
  else addMessage('assistant', 'Banked.');
 }
+
+// ── Session auto-save triggers ────────────────────────────────────────────────
+window.addEventListener('beforeunload', () => { endSession(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') endSession();
+});
