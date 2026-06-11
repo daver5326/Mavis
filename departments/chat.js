@@ -174,40 +174,67 @@ async function handleThreadUpdate(text) {
 }
 
 async function endSession() {
- if (!window._sessionLog || window._sessionLog.length < 2) return;
- try {
-   await fred.writeSessionReport(window._sessionLog);
-   const insight = await fred.surface();
-   if (insight) showDashboardMessage('assistant', `Fred: ${insight}`);
- } catch(e) { console.error('endSession error:', e); }
- window._sessionLog = [];
+  const log = window._sessionLog || [];
+  if (log.length < 2) return;
+  try {
+    await fred.writeSessionReport(log);
+    const insight = await fred.surface();
+    if (insight) showDashboardMessage('assistant', `Fred: ${insight}`);
+  } catch(e) { console.error('endSession error:', e); }
+  window._sessionLog = [];
+  window._sessionId = null;
 }
 
 async function autoSaveProgress() {
- if (!currentThread || chatHistory.length < 3) return;
- const summary = chatHistory.slice(-8).map(m => (m.role === 'user' ? 'Me: ' : 'Mavis: ') + m.content).join('\n');
- await appendProgress(currentThread, summary, 'Auto-saved');
- updateDavidProfile(summary);
+  if (!currentThread || chatHistory.length < 3) return;
+  const summary = chatHistory.slice(-8).map(m => (m.role === 'user' ? 'Me: ' : 'Mavis: ') + m.content).join('\n');
+  await appendProgress(currentThread, summary, 'Auto-saved');
+  updateDavidProfile(summary);
 }
 
 async function saveProgress() {
- if (!currentThread) return;
- const summary = chatHistory.slice(-6).map(m => (m.role === 'user' ? 'Me: ' : 'Mavis: ') + m.content).join('\n');
- const newProgress = await appendProgress(currentThread, summary, 'Session');
- currentThread['Current progress'] = newProgress;
- addMessage('assistant', 'Progress saved.');
- updateDavidProfile(summary);
+  if (!currentThread) return;
+  const summary = chatHistory.slice(-6).map(m => (m.role === 'user' ? 'Me: ' : 'Mavis: ') + m.content).join('\n');
+  const newProgress = await appendProgress(currentThread, summary, 'Session');
+  currentThread['Current progress'] = newProgress;
+  addMessage('assistant', 'Progress saved.');
+  updateDavidProfile(summary);
 }
 
 async function saveIdea(transcript) {
- if (!currentThread) { showDashboardMessage('assistant', 'Open a project first.'); return; }
- const recentContext = chatHistory.slice(-4).map(m => m.content).join(' | ');
- const { error } = await insertIdea(currentThread.id, recentContext || transcript);
- if (error) addMessage('assistant', 'Error saving idea: ' + error.message);
- else addMessage('assistant', 'Banked.');
+  if (!currentThread) { showDashboardMessage('assistant', 'Open a project first.'); return; }
+  const recentContext = chatHistory.slice(-4).map(m => m.content).join(' | ');
+  const { error } = await insertIdea(currentThread.id, recentContext || transcript);
+  if (error) addMessage('assistant', 'Error saving idea: ' + error.message);
+  else addMessage('assistant', 'Banked.');
 }
 
-// ── Session auto-save trigger ─────────────────────────────────────────────────
+// ── Session persistence — layered auto-save ───────────────────────────────────
+
+function getSessionLog() {
+  // Merge dashboard log and thread chatHistory into one unified log
+  const dashLog = window._sessionLog || [];
+  const threadLog = chatHistory.map(m => ({ role: m.role, content: m.content }));
+  const combined = [...dashLog];
+  threadLog.forEach(m => {
+    if (!combined.find(e => e.content === m.content)) combined.push(m);
+  });
+  return combined;
+}
+
+async function triggerAutoSave() {
+  const log = getSessionLog();
+  if (log.length < 2) return;
+  await fred.writeSessionReport(log);
+}
+
+// Visibility API — fires when user tabs away or closes
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') endSession();
+  if (document.visibilityState === 'hidden') triggerAutoSave();
 });
+
+// Periodic save — every 10 minutes, backstop for browser gaps
+setInterval(() => {
+  const log = getSessionLog();
+  if (log.length >= 2) triggerAutoSave();
+}, 10 * 60 * 1000);
