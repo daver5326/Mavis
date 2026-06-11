@@ -70,22 +70,9 @@ const fred = {
         ? existingData.data[0].value
         : '';
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        keepalive: true,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system: `You are the Mavis Foreman. You have the current cold start document and a session summary. Update ONLY these three sections based on the session: CURRENT SYSTEM STATE, BUILD LOG, and OPEN QUESTIONS PARKED. Return the complete updated document. No explanation.`,
-          messages: [{
-            role: 'user',
-            content: `Current document:\n${currentDoc.slice(0, 8000)}\n\nSession summary:\n${sessionSummary}`
-          }]
-        })
-      });
-      const data = await response.json();
-      if (!data.content || !data.content[0]) return;
-
-      const updatedDoc = data.content[0].text.trim();
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const entry = `\n\n---\nSESSION ${timestamp}\n${sessionSummary}`;
+      const updatedDoc = currentDoc + entry;
 
       await fetch('/api/supabase-admin', {
         method: 'POST',
