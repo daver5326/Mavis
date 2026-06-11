@@ -6,13 +6,9 @@ const fred = {
   log: [],
   sessionStart: new Date().toISOString(),
 
-  // ─── OBSERVE ──────────────────────────────────────────────────────────────
-
   observe(event) {
     this.log.push({ event, timestamp: new Date().toISOString() });
   },
-
-  // ─── SESSION HEALTH REPORT ───────────────────────────────────────────────
 
   async writeSessionReport(sessionLog) {
     if (!sessionLog || sessionLog.length < 2) return;
@@ -57,12 +53,11 @@ const fred = {
     } catch(e) { console.error('Fred session report error:', e); }
   },
 
-  // ─── PATCH COLD START DOC ────────────────────────────────────────────────
-
   async patchColdStartDoc(sessionSummary) {
     try {
       const existing = await fetch('/api/supabase-admin', {
         method: 'POST',
+        keepalive: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'select',
@@ -77,6 +72,7 @@ const fred = {
 
       const response = await fetch('/api/chat', {
         method: 'POST',
+        keepalive: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           system: `You are the Mavis Foreman. You have the current cold start document and a session summary. Update ONLY these three sections based on the session: CURRENT SYSTEM STATE, BUILD LOG, and OPEN QUESTIONS PARKED. Return the complete updated document. No explanation.`,
@@ -93,6 +89,7 @@ const fred = {
 
       await fetch('/api/supabase-admin', {
         method: 'POST',
+        keepalive: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'upsert',
@@ -102,8 +99,6 @@ const fred = {
       });
     } catch(e) { console.error('Fred cold start patch error:', e); }
   },
-
-  // ─── COMMANDMENT HEALTH CHECK ────────────────────────────────────────────
 
   async healthCheck() {
     try {
@@ -162,8 +157,6 @@ const fred = {
     }
   },
 
-  // ─── PATTERN ANALYSIS ────────────────────────────────────────────────────
-
   getPatterns() {
     const counts = {};
     this.log.forEach(entry => {
@@ -171,8 +164,6 @@ const fred = {
     });
     return counts;
   },
-
-  // ─── SURFACE INSIGHT ─────────────────────────────────────────────────────
 
   async surface() {
     try {
@@ -211,8 +202,6 @@ const fred = {
     } catch(e) {}
     return null;
   },
-
-  // ─── PROPOSE PROJECTS ────────────────────────────────────────────────────
 
   async proposeProjects() {
     try {
