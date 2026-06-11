@@ -1,5 +1,5 @@
 // ─── FRED.JS — Pattern observer, health monitor, shop foreman ─────────────
-// Session 10 verified AGAIN!!
+// Session 11 verified
 
 const fred = {
 
@@ -67,7 +67,7 @@ const fred = {
         body: JSON.stringify({
           action: 'select',
           table: 'mavis_config',
-          filters: { key: 'cold_start_document' }
+          filters: { key: 'living_document_summary' }
         })
       });
       const existingData = await existing.json();
@@ -97,7 +97,7 @@ const fred = {
         body: JSON.stringify({
           action: 'upsert',
           table: 'mavis_config',
-          data: { key: 'cold_start_document', value: updatedDoc }
+          data: { key: 'living_document_summary', value: updatedDoc }
         })
       });
     } catch(e) { console.error('Fred cold start patch error:', e); }
