@@ -1,0 +1,158 @@
+// factory/buildmode.js
+// /build mode — Phase 2
+// Self-contained: does not depend on agent.js exports.
+// Detects /build trigger, assembles full Ralph+repo+session context,
+// flags session for Fred to write a build-type exit record.
+
+const BUILD_MODEL = "claude-opus-4-6"; // hardcoded per Council decision (Session 12)
+
+const OPEN_ITEMS = [
+  "Routing suggestion noise — analyzeAndRoute fires on conversational messages",
+  "Council button CSS conflict in thread top bar",
+  "Mavis self-knowledge gap in conversational mode — fabricates architecture",
+  "File path protocol not structurally enforced",
+  "Make it so button appearance inconsistent",
+  "updated_at on mavis_config not updating on upsert (cosmetic)",
+  "[PARKED] Architecture diagram (Mermaid, layer-level) — build after first /build session",
+  "[PARKED] Model routing logic — revisit once multiple AI features exist"
+];
+
+/**
+ * Detect /build trigger and parse optional file paths.
+ * Returns { isBuild: bool, filePaths: string[] }
+ */
+function detectBuildTrigger(message) {
+  const trimmed = message.trim();
+  if (!trimmed.toLowerCase().startsWith("/build")) {
+    return { isBuild: false, filePaths: [] };
+  }
+  const rest = trimmed.slice("/build".length).trim();
+  const filePaths = rest.length > 0 ? rest.split(/\s+/) : [];
+  return { isBuild: true, filePaths };
+}
+
+/**
+ * Fetch raw file content from GitHub (self-contained, no agent.js dependency).
+ * Requires GITHUB_TOKEN and repo info from env/config.
+ */
+async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis", branch = "main") {
+  const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `token ${githubToken}`,
+      Accept: "application/vnd.github.v3+json"
+    }
+  });
+  if (!res.ok) {
+    return { path: filePath, error: `Failed to fetch (${res.status})` };
+  }
+  const data = await res.json();
+  const content = Buffer.from(data.content, "base64").toString("utf-8");
+  return { path: filePath, content };
+}
+
+/**
+ * Pull last N build-type session records from Supabase.
+ */
+async function fetchRecentBuildSessions(supabase, limit = 10) {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("session_type, decisions_made, files_changed, next_action, created_at")
+    .eq("session_type", "build")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Assemble full /build context.
+ * ralphGlobals: the existing six globals Ralph populates at boot
+ *   (_livingDocSummary, _councilPersonas, _recentSessions, _repoMap, _davidProfile, _activeThreads)
+ */
+async function assembleBuildContext({ filePaths, githubToken, supabase, ralphGlobals }) {
+  const fileContents = await Promise.all(
+    filePaths.map((p) => fetchFileContent(p, githubToken))
+  );
+
+  const recentBuildSessions = await fetchRecentBuildSessions(supabase, 10);
+
+  return {
+    model: BUILD_MODEL,
+    ralphGlobals,
+    requestedFiles: fileContents,
+    recentBuildSessions,
+    openItems: OPEN_ITEMS
+  };
+}
+
+/**
+ * Build the system prompt block for a /build session.
+ */
+function buildModeSystemPrompt(context) {
+  const fileBlocks = context.requestedFiles
+    .map((f) =>
+      f.error
+        ? `--- FILE: ${f.path} (ERROR: ${f.error}) ---`
+        : `--- FILE: ${f.path} ---\n${f.content}`
+    )
+    .join("\n\n");
+
+  const sessionBlocks = context.recentBuildSessions
+    .map(
+      (s) =>
+        `[${s.created_at}] decisions: ${s.decisions_made || "—"} | files: ${
+          s.files_changed || "—"
+        } | next: ${s.next_action || "—"}`
+    )
+    .join("\n");
+
+  const openItemsBlock = context.openItems.map((i) => `- ${i}`).join("\n");
+
+  return `
+=== /build MODE ACTIVE ===
+Model: ${context.model}
+
+LIVING DOCUMENT SUMMARY:
+${context.ralphGlobals._livingDocSummary || "(none loaded)"}
+
+REPO MAP:
+${JSON.stringify(context.ralphGlobals._repoMap || {}, null, 2)}
+
+REQUESTED FILES (FULL CONTENT):
+${fileBlocks || "(none requested)"}
+
+LAST ${context.recentBuildSessions.length} BUILD SESSIONS:
+${sessionBlocks || "(none yet — this may be the first)"}
+
+OPEN / PARKED ITEMS:
+${openItemsBlock}
+
+Working protocol: full file replacements for large files, one file at a time,
+full path before every edit, "C" = committed, "FF" = send full file.
+=== END /build CONTEXT ===
+`.trim();
+}
+
+/**
+ * Flag for Fred: this session should write a build-type exit record
+ * with decisions_made, files_changed, next_action populated.
+ */
+function markBuildSession(session) {
+  session.session_type = "build";
+  return session;
+}
+
+module.exports = {
+  detectBuildTrigger,
+  fetchFileContent,
+  fetchRecentBuildSessions,
+  assembleBuildContext,
+  buildModeSystemPrompt,
+  markBuildSession,
+  BUILD_MODEL,
+  OPEN_ITEMS
+};
