@@ -6,7 +6,6 @@
 // Requires factory/buildmode.js (CommonJS — fine here, this runs on Vercel).
 // Env vars required: GITHUB_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
-const { createClient } = require('@supabase/supabase-js');
 const buildmode = require('../factory/buildmode');
 
 module.exports = async function handler(req, res) {
@@ -22,15 +21,17 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'GITHUB_TOKEN not configured' });
     }
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(500).json({ error: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured' });
+    }
 
     const context = await buildmode.assembleBuildContext({
       filePaths,
       githubToken,
-      supabase,
+      supabaseUrl,
+      supabaseKey,
       ralphGlobals
     });
 
