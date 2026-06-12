@@ -52,20 +52,21 @@ async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis",
 }
 
 /**
- * Pull last N build-type session records from Supabase.
+ * Pull last N build-type session records via Supabase REST (PostgREST).
+ * Self-contained — no @supabase/supabase-js dependency required.
  */
-async function fetchRecentBuildSessions(supabase, limit = 10) {
-  const { data, error } = await supabase
-    .from("sessions")
-    .select("session_type, decisions_made, files_changed, next_action, created_at")
-    .eq("session_type", "build")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
+async function fetchRecentBuildSessions(supabaseUrl, supabaseKey, limit = 10) {
+  const url = `${supabaseUrl}/rest/v1/sessions?session_type=eq.build&order=created_at.desc&limit=${limit}&select=session_type,decisions_made,files_changed,next_action,created_at`;
+  const res = await fetch(url, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`
+    }
+  });
+  if (!res.ok) {
     return [];
   }
-  return data || [];
+  return res.json();
 }
 
 /**
@@ -73,12 +74,12 @@ async function fetchRecentBuildSessions(supabase, limit = 10) {
  * ralphGlobals: the existing six globals Ralph populates at boot
  *   (_livingDocSummary, _councilPersonas, _recentSessions, _repoMap, _davidProfile, _activeThreads)
  */
-async function assembleBuildContext({ filePaths, githubToken, supabase, ralphGlobals }) {
+async function assembleBuildContext({ filePaths, githubToken, supabaseUrl, supabaseKey, ralphGlobals }) {
   const fileContents = await Promise.all(
     filePaths.map((p) => fetchFileContent(p, githubToken))
   );
 
-  const recentBuildSessions = await fetchRecentBuildSessions(supabase, 10);
+  const recentBuildSessions = await fetchRecentBuildSessions(supabaseUrl, supabaseKey, 10);
 
   return {
     model: BUILD_MODEL,
