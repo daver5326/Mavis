@@ -56,7 +56,11 @@ async function handleBuildMode(text) {
 
     thinking.textContent = '...';
 
-    chatHistory.push({ role: 'user', content: text });
+    // /build sessions get their own isolated history — kept separate from
+    // dashboard chatHistory so prior conversational context (e.g. discussing
+    // Ripple) doesn't bleed into Mavis self-development context.
+    if (!window._buildChatHistory) window._buildChatHistory = [];
+    window._buildChatHistory.push({ role: 'user', content: text });
 
     const chatResponse = await fetch('/api/chat', {
       method: 'POST',
@@ -64,7 +68,7 @@ async function handleBuildMode(text) {
       body: JSON.stringify({
         model: ctxData.model,
         system: ctxData.systemPrompt,
-        messages: chatHistory.slice(-MAX_HISTORY_WINDOW)
+        messages: window._buildChatHistory.slice(-MAX_HISTORY_WINDOW)
       })
     });
     const data = await chatResponse.json();
@@ -75,7 +79,7 @@ async function handleBuildMode(text) {
       const reply = data.content[0].text.trim();
       showDashboardMessage('assistant', reply);
       if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
-      chatHistory.push({ role: 'assistant', content: reply });
+      window._buildChatHistory.push({ role: 'assistant', content: reply });
       showMakeItSoButton(`${text} — ${reply.slice(0, 200)}`);
     } else if (data.error) {
       showDashboardMessage('assistant', 'Build mode error: ' + data.error);
@@ -266,6 +270,7 @@ async function endSession() {
   window._sessionLog = [];
   window._sessionId = null;
   window._sessionType = null;
+  window._buildChatHistory = [];
 }
 
 async function autoSaveProgress() {
