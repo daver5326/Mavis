@@ -117,7 +117,18 @@ function buildModeSystemPrompt(context) {
 === /build MODE ACTIVE ===
 Model: ${context.model}
 
-LIVING DOCUMENT SUMMARY:
+CONTEXT: You are in Mavis self-development mode. "Mavis" is the AI development
+system David is building — the factory itself, including this chat interface,
+its routing, its agents, and its memory architecture. This is NOT one of
+David's other project threads (Ripple, Wingsuit, Musician Hero) — those are
+separate apps Mavis will eventually help build, but they are not in scope here.
+
+The LIVING DOCUMENT SUMMARY below may reference those other projects (Ripple,
+etc.) because it's shared across all of Mavis's contexts — treat that as
+background only. Your job in this session is to read and reason about Mavis's
+own codebase (the files below) and propose changes to Mavis itself.
+
+LIVING DOCUMENT SUMMARY (general Mavis context, may include other-project mentions):
 ${context.ralphGlobals._livingDocSummary || "(none loaded)"}
 
 REPO MAP:
