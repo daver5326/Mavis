@@ -9,6 +9,86 @@ function shouldAnalyzeForRouting(text) {
  return text.trim().split(/\s+/).length > ROUTING_WORD_THRESHOLD;
 }
 
+// ── /build mode helpers ────────────────────────────────────────────────────
+
+function parseBuildPaths(text) {
+  const rest = text.trim().slice('/build'.length).trim();
+  return rest.length > 0 ? rest.split(/\s+/) : [];
+}
+
+async function handleBuildMode(text) {
+  const msgContainer = document.getElementById('dashboard-messages');
+
+  const thinking = document.createElement('div');
+  thinking.className = 'message assistant thinking';
+  thinking.textContent = 'Assembling build context...';
+  msgContainer.appendChild(thinking);
+  msgContainer.scrollTop = 999999;
+
+  try {
+    const filePaths = parseBuildPaths(text);
+
+    const ctxResponse = await fetch('/api/build-context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filePaths,
+        ralphGlobals: {
+          _livingDocSummary: window._livingDocSummary,
+          _councilPersonas: window._councilPersonas,
+          _recentSessions: window._recentSessions,
+          _repoMap: window._repoMap,
+          _davidProfile: window._davidProfile,
+          _activeThreads: window._activeThreads
+        }
+      })
+    });
+    const ctxData = await ctxResponse.json();
+
+    if (ctxData.error) {
+      thinking.remove();
+      showDashboardMessage('assistant', 'Build context error: ' + ctxData.error);
+      return;
+    }
+
+    // Mark session as build-type for Fred's exit report
+    window._sessionType = 'build';
+
+    thinking.textContent = '...';
+
+    chatHistory.push({ role: 'user', content: text });
+
+    const chatResponse = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: ctxData.model,
+        system: ctxData.systemPrompt,
+        messages: chatHistory.slice(-MAX_HISTORY_WINDOW)
+      })
+    });
+    const data = await chatResponse.json();
+
+    thinking.remove();
+
+    if (data.content && data.content[0]) {
+      const reply = data.content[0].text.trim();
+      showDashboardMessage('assistant', reply);
+      if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: reply });
+      chatHistory.push({ role: 'assistant', content: reply });
+      showMakeItSoButton(`${text} — ${reply.slice(0, 200)}`);
+    } else if (data.error) {
+      showDashboardMessage('assistant', 'Build mode error: ' + data.error);
+    }
+
+  } catch (e) {
+    thinking.remove();
+    showDashboardMessage('assistant', 'Build mode error: ' + e.message);
+  }
+}
+
+// ── Main send handler ──────────────────────────────────────────────────────
+
 async function sendMessage(inputId) {
  const inputElId = inputId || (currentView === 'dashboard' ? 'dashboard-input' : 'chat-input');
  const input = document.getElementById(inputElId);
@@ -25,9 +105,11 @@ async function sendMessage(inputId) {
    const isAgentCall = agentTriggers.some(t => text.toLowerCase().startsWith(t));
    if (isAgentCall) { handleAgentAction(text); return; }
    if (text.toLowerCase().startsWith('/council')) { runCouncilHuddle(); return; }
+   if (text.toLowerCase().startsWith('/build')) { handleBuildMode(text); return; }
 
    // ── LLM intent classification ─────────────────────────────────────────
    const intent = await detectIntent(text);
+   if (intent === 'build_mode') { handleBuildMode(text); return; }
    if (intent === 'thread_update') { handleThreadUpdate(text); return; }
    if (intent === 'new_project') { handleNewProjectRequest(text); return; }
    if (intent === 'build_request') { handleAgentAction(text); return; }
@@ -177,12 +259,13 @@ async function endSession() {
   const log = window._sessionLog || [];
   if (log.length < 2) return;
   try {
-    await fred.writeSessionReport(log);
+    await fred.writeSessionReport(log, window._sessionType || 'chat');
     const insight = await fred.surface();
     if (insight) showDashboardMessage('assistant', `Fred: ${insight}`);
   } catch(e) { console.error('endSession error:', e); }
   window._sessionLog = [];
   window._sessionId = null;
+  window._sessionType = null;
 }
 
 async function autoSaveProgress() {
@@ -225,7 +308,7 @@ function getSessionLog() {
 async function triggerAutoSave() {
   const log = getSessionLog();
   if (log.length < 2) return;
-  await fred.writeSessionReport(log);
+  await fred.writeSessionReport(log, window._sessionType || 'chat');
 }
 
 // Visibility API — fires when user tabs away or closes
