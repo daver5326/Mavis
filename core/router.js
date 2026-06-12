@@ -1,6 +1,13 @@
 // ─── ROUTER.JS — Intent detection and routing ─────────────────────────────────
 
 async function detectIntent(text) {
+  // /build fast-path: skip Haiku classification entirely.
+  // Prevents routing noise (analyzeAndRoute) on build-mode messages
+  // and lets chat.js handle /build directly via buildmode.js.
+  if (text.trim().toLowerCase().startsWith('/build')) {
+    return 'build_mode';
+  }
+
   try {
     const response = await fetch('/api/chat', {
       method: 'POST',
