@@ -1,5 +1,5 @@
 // ─── FRED.JS — Pattern observer, health monitor, shop foreman ─────────────
-// Session 11 verified
+// Session 13 — writeSessionReport now accepts session_type, branches for build sessions
 
 const fred = {
 
@@ -10,9 +10,64 @@ const fred = {
     this.log.push({ event, timestamp: new Date().toISOString() });
   },
 
-  async writeSessionReport(sessionLog) {
+  async writeSessionReport(sessionLog, sessionType = 'chat') {
     if (!sessionLog || sessionLog.length < 2) return;
     try {
+      const logText = sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 3000);
+
+      if (sessionType === 'build') {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system: `You are the Mavis Foreman reviewing a /build session (Mavis self-development). Return ONLY a JSON object, no markdown, no preamble: { "summary": "2-3 sentences on what was accomplished", "decisions_made": "key decisions, comma-separated or short phrases", "files_changed": "file paths touched, comma-separated", "next_action": "the single most important next step" }`,
+            messages: [{
+              role: 'user',
+              content: `Build session log:\n${logText}`
+            }]
+          })
+        });
+        const data = await response.json();
+        if (!data.content || !data.content[0]) return;
+
+        const raw = data.content[0].text.trim().replace(/```json|```/g, '');
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          parsed = { summary: raw.slice(0, 500), decisions_made: '', files_changed: '', next_action: '' };
+        }
+
+        const patterns = this.getPatterns();
+
+        await fetch('/api/supabase-admin', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'insert',
+            table: 'sessions',
+            data: {
+              raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
+              summary: parsed.summary || '',
+              key_decisions: parsed.decisions_made || '',
+              decisions_made: parsed.decisions_made || '',
+              files_changed: parsed.files_changed || '',
+              next_action: parsed.next_action || '',
+              session_type: 'build',
+              patterns_observed: JSON.stringify(patterns),
+              project_tags: []
+            }
+          })
+        });
+
+        // Build sessions don't append to the living document — their history
+        // lives in the dedicated build-session query path (fetchRecentBuildSessions).
+        return;
+      }
+
+      // ── Default / chat session path (unchanged) ──
       const response = await fetch('/api/chat', {
         method: 'POST',
         keepalive: true,
@@ -21,7 +76,7 @@ const fred = {
           system: `You are the Mavis Foreman. You observe how David works — not just what he builds, but how he thinks, decides, and moves. Write a brief session report with three parts: (1) SUMMARY: 2-3 sentences on what was accomplished. (2) PATTERNS: one observation about how David worked today — his energy, decisions, focus, or blocks. (3) NEXT: the single most important thing to do next session. Be direct. No padding.`,
           messages: [{
             role: 'user',
-            content: `Session log:\n${sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 3000)}`
+            content: `Session log:\n${logText}`
           }]
         })
       });
@@ -42,6 +97,7 @@ const fred = {
             raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
             summary: report,
             key_decisions: '',
+            session_type: 'chat',
             patterns_observed: JSON.stringify(patterns),
             project_tags: []
           }
