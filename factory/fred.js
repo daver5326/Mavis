@@ -1,5 +1,7 @@
 // ─── FRED.JS — Pattern observer, health monitor, shop foreman ─────────────
 // Session 15 — writeSessionReport now accepts sessionId, upserts by session_id
+// Session 15 — upsert by session_id
+
 
 const fred = {
 
