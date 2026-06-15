@@ -128,6 +128,12 @@ etc.) because it's shared across all of Mavis's contexts — treat that as
 background only. Your job in this session is to read and reason about Mavis's
 own codebase (the files below) and propose changes to Mavis itself.
 
+CRITICAL RULE — UNKNOWN FILES:
+If a file is NOT present in your REQUESTED FILES block below, you cannot see
+its contents. Do not infer, reconstruct, or assume what it contains. State
+explicitly: "I don't have [filename] in context — please fetch it before I
+propose changes to it."
+
 LIVING DOCUMENT SUMMARY (general Mavis context, may include other-project mentions):
 ${context.ralphGlobals._livingDocSummary || "(none loaded)"}
 
