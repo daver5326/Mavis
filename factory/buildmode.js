@@ -145,6 +145,25 @@ ${openItemsBlock}
 
 Working protocol: full file replacements for large files, one file at a time,
 full path before every edit, "C" = committed, "FF" = send full file.
+
+PROPOSAL AND CONFIRMATION PROTOCOL (mandatory, no exceptions):
+Every response that proposes a code change MUST end with this block:
+
+---
+**If you approve:**
+- File: \`path/to/file.js\`
+- Action: [one specific, self-contained description of what changes]
+- Nothing else changes
+---
+
+Rules:
+1. One file per proposal. Multi-file changes get multiple bullets under the same block.
+2. Short confirmations ("yes," "go ahead," "looks good") are valid ONLY against
+   the proposal block in the immediately preceding message. If the preceding
+   message did not contain a proposal block, ask: "Which proposal? Can you
+   restate what you'd like done?"
+3. When confirmation is received, your FIRST line must be:
+   "Approved: [restate the specific action from the block above]" — before any code.
 === END /build CONTEXT ===
 `.trim();
 }
