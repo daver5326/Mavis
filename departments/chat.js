@@ -17,6 +17,37 @@ function initSessionId() {
  }
 }
 
+// ── Build confirmation detection ───────────────────────────────────────────────
+
+function isBuildConfirmation(text) {
+ const confirmations = ['yes', 'go ahead', 'do it', 'commit', 'approved', 'confirm', 'make it so'];
+ return confirmations.includes(text.trim().toLowerCase());
+}
+
+// ── Extract file path and code block from last Opus response ──────────────────
+
+function extractBuildProposal(history) {
+ // Walk back through build history to find last assistant message with a code block
+ for (let i = history.length - 1; i >= 0; i--) {
+   const msg = history[i];
+   if (msg.role !== 'assistant') continue;
+
+   // Extract file path from proposal block — "File: `path/to/file.js`"
+   const pathMatch = msg.content.match(/File:\s*`([^`]+)`/);
+   if (!pathMatch) continue;
+
+   // Extract code block — ```js ... ``` or ``` ... ```
+   const codeMatch = msg.content.match(/```(?:js|javascript)?\n([\s\S]+?)```/);
+   if (!codeMatch) continue;
+
+   return {
+     path: pathMatch[1],
+     content: codeMatch[1]
+   };
+ }
+ return null;
+}
+
 // ── /build mode helpers ────────────────────────────────────────────────────
 
 function parseBuildPaths(text) {
@@ -29,6 +60,45 @@ async function handleBuildMode(text) {
  window._buildModeActive = true;
  initSessionId();
  const msgContainer = document.getElementById('dashboard-messages');
+
+ // ── Commit path — confirmation of a pending proposal ──────────────────────
+ if (isBuildConfirmation(text) && window._buildChatHistory && window._buildChatHistory.length > 0) {
+   const proposal = extractBuildProposal(window._buildChatHistory);
+   if (proposal) {
+     const committing = document.createElement('div');
+     committing.className = 'message assistant thinking';
+     committing.textContent = `Committing ${proposal.path}...`;
+     msgContainer.appendChild(committing);
+     msgContainer.scrollTop = 999999;
+
+     try {
+       const writeRes = await fetch('/api/build-write', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           path: proposal.path,
+           content: proposal.content,
+           commitMessage: `Mavis /build: update ${proposal.path}`
+         })
+       });
+       const writeData = await writeRes.json();
+       committing.remove();
+
+       if (writeData.success) {
+         showDashboardMessage('assistant', `Committed. ${proposal.path} is live — Vercel deploying now.`);
+         if (window._sessionLog) window._sessionLog.push({ role: 'assistant', content: `Committed ${proposal.path}` });
+         window._buildChatHistory.push({ role: 'user', content: text });
+         window._buildChatHistory.push({ role: 'assistant', content: `Committed ${proposal.path}` });
+       } else {
+         showDashboardMessage('assistant', `Commit failed: ${writeData.error}`);
+       }
+     } catch (e) {
+       committing.remove();
+       showDashboardMessage('assistant', `Commit error: ${e.message}`);
+     }
+     return;
+   }
+ }
 
  const thinking = document.createElement('div');
  thinking.className = 'message assistant thinking';
@@ -62,14 +132,9 @@ async function handleBuildMode(text) {
      return;
    }
 
-   // Mark session as build-type for Fred's exit report
    window._sessionType = 'build';
-
    thinking.textContent = '...';
 
-   // /build sessions get their own isolated history — kept separate from
-   // dashboard chatHistory so prior conversational context (e.g. discussing
-   // Ripple) doesn't bleed into Mavis self-development context.
    if (!window._buildChatHistory) window._buildChatHistory = [];
    window._buildChatHistory.push({ role: 'user', content: text });
 
@@ -176,7 +241,6 @@ if (currentView === 'dashboard') {
       chatHistory.push({ role: 'assistant', content: reply });
       speak(reply);
 
-      // ── If Mavis proposed something, show Make it so ──────────────────
       const proposalKeywords = ['fred', 'update', 'modify', 'change', 'add', 'build', 'deploy', 'push'];
       const lowerReply = reply.toLowerCase();
       const soundsLikeProposal = proposalKeywords.filter(k => lowerReply.includes(k)).length >= 2;
@@ -332,12 +396,10 @@ async function triggerAutoSave() {
  await fred.writeSessionReport(log, window._sessionType || 'chat', window._sessionId);
 }
 
-// Visibility API — fires when user tabs away or closes
 document.addEventListener('visibilitychange', () => {
  if (document.visibilityState === 'hidden') triggerAutoSave();
 });
 
-// Periodic save — every 10 minutes, backstop for browser gaps
 setInterval(() => {
  const log = getSessionLog();
  if (log.length >= 2) triggerAutoSave();
