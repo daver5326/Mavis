@@ -3,6 +3,7 @@
 // Self-contained: does not depend on agent.js exports.
 // Detects /build trigger, assembles full Ralph+repo+session context,
 // flags session for Fred to write a build-type exit record.
+// test comment
 
 const BUILD_MODEL = "claude-opus-4-6"; // hardcoded per Council decision (Session 12)
 
