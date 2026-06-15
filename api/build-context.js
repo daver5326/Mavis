@@ -16,6 +16,8 @@ module.exports = async function handler(req, res) {
   try {
     const { filePaths = [], ralphGlobals = {} } = req.body || {};
 
+    console.log('build-context: filePaths received:', JSON.stringify(filePaths));
+
     const githubToken = process.env.GITHUB_TOKEN;
     if (!githubToken) {
       return res.status(500).json({ error: 'GITHUB_TOKEN not configured' });
@@ -35,7 +37,12 @@ module.exports = async function handler(req, res) {
       ralphGlobals
     });
 
+    context.requestedFiles.forEach(f => {
+      console.log(`build-context: file=${f.path} size=${f.content ? f.content.length : 'ERROR'} chars`);
+    });
+
     const systemPrompt = buildmode.buildModeSystemPrompt(context);
+    console.log('build-context: systemPrompt total size:', systemPrompt.length, 'chars');
 
     return res.status(200).json({
       systemPrompt,
