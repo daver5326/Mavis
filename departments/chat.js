@@ -62,7 +62,8 @@ async function handleBuildMode(text) {
  const msgContainer = document.getElementById('dashboard-messages');
 
  // ── Commit path — confirmation of a pending proposal ──────────────────────
- if (isBuildConfirmation(text) && window._buildChatHistory && window._buildChatHistory.length > 0) {
+ const hasFilePath = text.split(/\s+/).some(t => t.includes('/') || (t.includes('.') && t.length > 3));
+if (!hasFilePath && isBuildConfirmation(text) && window._buildChatHistory && window._buildChatHistory.length > 0) {
    const proposal = extractBuildProposal(window._buildChatHistory);
    if (proposal) {
      const committing = document.createElement('div');
