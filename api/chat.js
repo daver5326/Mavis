@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { messages, system } = req.body;
+  const { messages, system, model } = req.body;
 
   // Prompt caching requires minimum ~1024 tokens. Short system prompts
   // (internal Fred/Ralph calls) should not use cache_control.
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: model || 'claude-sonnet-4-6',
         max_tokens: 8000,
         system: systemBlock,
         messages: messages
