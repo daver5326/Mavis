@@ -9,6 +9,14 @@ function shouldAnalyzeForRouting(text) {
  return text.trim().split(/\s+/).length > ROUTING_WORD_THRESHOLD;
 }
 
+// ── Session ID — set once per session, cleared only in endSession ─────────────
+
+function initSessionId() {
+  if (!window._sessionId) {
+    window._sessionId = crypto.randomUUID();
+  }
+}
+
 // ── /build mode helpers ────────────────────────────────────────────────────
 
 function parseBuildPaths(text) {
@@ -17,6 +25,7 @@ function parseBuildPaths(text) {
 }
 
 async function handleBuildMode(text) {
+  initSessionId();
   const msgContainer = document.getElementById('dashboard-messages');
 
   const thinking = document.createElement('div');
@@ -101,6 +110,7 @@ async function sendMessage(inputId) {
  input.value = '';
 
  if (currentView === 'dashboard') {
+   initSessionId();
    showDashboardMessage('user', text);
    if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
@@ -263,7 +273,7 @@ async function endSession() {
   const log = window._sessionLog || [];
   if (log.length < 2) return;
   try {
-    await fred.writeSessionReport(log, window._sessionType || 'chat');
+    await fred.writeSessionReport(log, window._sessionType || 'chat', window._sessionId);
     const insight = await fred.surface();
     if (insight) showDashboardMessage('assistant', `Fred: ${insight}`);
   } catch(e) { console.error('endSession error:', e); }
@@ -300,7 +310,6 @@ async function saveIdea(transcript) {
 // ── Session persistence — layered auto-save ───────────────────────────────────
 
 function getSessionLog() {
-  // Merge dashboard log and thread chatHistory into one unified log
   const dashLog = window._sessionLog || [];
   const threadLog = chatHistory.map(m => ({ role: m.role, content: m.content }));
   const combined = [...dashLog];
@@ -311,9 +320,10 @@ function getSessionLog() {
 }
 
 async function triggerAutoSave() {
+  initSessionId();
   const log = getSessionLog();
   if (log.length < 2) return;
-  await fred.writeSessionReport(log, window._sessionType || 'chat');
+  await fred.writeSessionReport(log, window._sessionType || 'chat', window._sessionId);
 }
 
 // Visibility API — fires when user tabs away or closes
