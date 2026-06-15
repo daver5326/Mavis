@@ -1,5 +1,5 @@
 // ─── FRED.JS — Pattern observer, health monitor, shop foreman ─────────────
-// Session 13 — writeSessionReport now accepts session_type, branches for build sessions
+// Session 15 — writeSessionReport now accepts sessionId, upserts by session_id
 
 const fred = {
 
@@ -10,7 +10,7 @@ const fred = {
     this.log.push({ event, timestamp: new Date().toISOString() });
   },
 
-  async writeSessionReport(sessionLog, sessionType = 'chat') {
+  async writeSessionReport(sessionLog, sessionType = 'chat', sessionId = null) {
     if (!sessionLog || sessionLog.length < 2) return;
     try {
       const logText = sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 3000);
@@ -40,34 +40,50 @@ const fred = {
         }
 
         const patterns = this.getPatterns();
+        const payload = {
+          raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
+          summary: parsed.summary || '',
+          key_decisions: parsed.decisions_made || '',
+          decisions_made: parsed.decisions_made || '',
+          files_changed: parsed.files_changed || '',
+          next_action: parsed.next_action || '',
+          session_type: 'build',
+          patterns_observed: JSON.stringify(patterns),
+          project_tags: []
+        };
 
-        await fetch('/api/supabase-admin', {
-          method: 'POST',
-          keepalive: true,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'insert',
-            table: 'sessions',
-            data: {
-              raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
-              summary: parsed.summary || '',
-              key_decisions: parsed.decisions_made || '',
-              decisions_made: parsed.decisions_made || '',
-              files_changed: parsed.files_changed || '',
-              next_action: parsed.next_action || '',
-              session_type: 'build',
-              patterns_observed: JSON.stringify(patterns),
-              project_tags: []
-            }
-          })
-        });
+        if (sessionId) payload.session_id = sessionId;
 
-        // Build sessions don't append to the living document — their history
-        // lives in the dedicated build-session query path (fetchRecentBuildSessions).
+        // Upsert: update existing row if session_id matches, else insert
+        if (sessionId) {
+          await fetch('/api/supabase-admin', {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'upsert',
+              table: 'sessions',
+              data: payload,
+              onConflict: 'session_id'
+            })
+          });
+        } else {
+          await fetch('/api/supabase-admin', {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'insert',
+              table: 'sessions',
+              data: payload
+            })
+          });
+        }
+
         return;
       }
 
-      // ── Default / chat session path (unchanged) ──
+      // ── Default / chat session path ──
       const response = await fetch('/api/chat', {
         method: 'POST',
         keepalive: true,
@@ -85,24 +101,41 @@ const fred = {
 
       const report = data.content[0].text.trim();
       const patterns = this.getPatterns();
+      const payload = {
+        raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
+        summary: report,
+        key_decisions: '',
+        session_type: 'chat',
+        patterns_observed: JSON.stringify(patterns),
+        project_tags: []
+      };
 
-      await fetch('/api/supabase-admin', {
-        method: 'POST',
-        keepalive: true,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'insert',
-          table: 'sessions',
-          data: {
-            raw_log: sessionLog.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n').slice(0, 5000),
-            summary: report,
-            key_decisions: '',
-            session_type: 'chat',
-            patterns_observed: JSON.stringify(patterns),
-            project_tags: []
-          }
-        })
-      });
+      if (sessionId) payload.session_id = sessionId;
+
+      if (sessionId) {
+        await fetch('/api/supabase-admin', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'upsert',
+            table: 'sessions',
+            data: payload,
+            onConflict: 'session_id'
+          })
+        });
+      } else {
+        await fetch('/api/supabase-admin', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'insert',
+            table: 'sessions',
+            data: payload
+          })
+        });
+      }
 
       await this.patchColdStartDoc(report);
 
