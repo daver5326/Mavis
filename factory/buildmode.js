@@ -7,113 +7,113 @@
 const BUILD_MODEL = "claude-opus-4-6"; // hardcoded per Council decision (Session 12)
 
 const OPEN_ITEMS = [
-  "Routing suggestion noise — analyzeAndRoute fires on conversational messages",
-  "Council button CSS conflict in thread top bar",
-  "Mavis self-knowledge gap in conversational mode — fabricates architecture",
-  "File path protocol not structurally enforced",
-  "Make it so button appearance inconsistent",
-  "updated_at on mavis_config not updating on upsert (cosmetic)",
-  "[PARKED] Architecture diagram (Mermaid, layer-level) — build after first /build session",
-  "[PARKED] Model routing logic — revisit once multiple AI features exist"
+ "Routing suggestion noise — analyzeAndRoute fires on conversational messages",
+ "Council button CSS conflict in thread top bar",
+ "Mavis self-knowledge gap in conversational mode — fabricates architecture",
+ "File path protocol not structurally enforced",
+ "Make it so button appearance inconsistent",
+ "updated_at on mavis_config not updating on upsert (cosmetic)",
+ "[PARKED] Architecture diagram (Mermaid, layer-level) — build after first /build session",
+ "[PARKED] Model routing logic — revisit once multiple AI features exist"
 ];
 
 /**
- * Detect /build trigger and parse optional file paths.
- * Returns { isBuild: bool, filePaths: string[] }
- */
+* Detect /build trigger and parse optional file paths.
+* Returns { isBuild: bool, filePaths: string[] }
+*/
 function detectBuildTrigger(message) {
-  const trimmed = message.trim();
-  if (!trimmed.toLowerCase().startsWith("/build")) {
-    return { isBuild: false, filePaths: [] };
-  }
-  const rest = trimmed.slice("/build".length).trim();
-  const filePaths = rest.length > 0 ? rest.split(/\s+/) : [];
-  return { isBuild: true, filePaths };
+ const trimmed = message.trim();
+ if (!trimmed.toLowerCase().startsWith("/build")) {
+   return { isBuild: false, filePaths: [] };
+ }
+ const rest = trimmed.slice("/build".length).trim();
+ const filePaths = rest.length > 0 ? rest.split(/\s+/) : [];
+ return { isBuild: true, filePaths };
 }
 
 /**
- * Fetch raw file content from GitHub (self-contained, no agent.js dependency).
- * Requires GITHUB_TOKEN and repo info from env/config.
- */
+* Fetch raw file content from GitHub (self-contained, no agent.js dependency).
+* Requires GITHUB_TOKEN and repo info from env/config.
+*/
 async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis", branch = "main") {
-  const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `token ${githubToken}`,
-      Accept: "application/vnd.github.v3+json"
-    }
-  });
-  if (!res.ok) {
-    return { path: filePath, error: `Failed to fetch (${res.status})` };
-  }
-  const data = await res.json();
-  const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8");
-  return { path: filePath, content };
+ const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
+ const res = await fetch(url, {
+   headers: {
+     Authorization: `token ${githubToken}`,
+     Accept: "application/vnd.github.v3+json"
+   }
+ });
+ if (!res.ok) {
+   return { path: filePath, error: `Failed to fetch (${res.status})` };
+ }
+ const data = await res.json();
+ const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8");
+ return { path: filePath, content };
 }
 
 /**
- * Pull last N build-type session records via Supabase REST (PostgREST).
- * Self-contained — no @supabase/supabase-js dependency required.
- */
+* Pull last N build-type session records via Supabase REST (PostgREST).
+* Self-contained — no @supabase/supabase-js dependency required.
+*/
 async function fetchRecentBuildSessions(supabaseUrl, supabaseKey, limit = 10) {
-  const url = `${supabaseUrl}/rest/v1/sessions?session_type=eq.build&order=created_at.desc&limit=${limit}&select=session_type,decisions_made,files_changed,next_action,created_at`;
-  const res = await fetch(url, {
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`
-    }
-  });
-  if (!res.ok) {
-    return [];
-  }
-  return res.json();
+ const url = `${supabaseUrl}/rest/v1/sessions?session_type=eq.build&order=created_at.desc&limit=${limit}&select=session_type,decisions_made,files_changed,next_action,created_at`;
+ const res = await fetch(url, {
+   headers: {
+     apikey: supabaseKey,
+     Authorization: `Bearer ${supabaseKey}`
+   }
+ });
+ if (!res.ok) {
+   return [];
+ }
+ return res.json();
 }
 
 /**
- * Assemble full /build context.
- * ralphGlobals: the existing six globals Ralph populates at boot
- *   (_livingDocSummary, _councilPersonas, _recentSessions, _repoMap, _davidProfile, _activeThreads)
- */
+* Assemble full /build context.
+* ralphGlobals: the existing six globals Ralph populates at boot
+*   (_livingDocSummary, _councilPersonas, _recentSessions, _repoMap, _davidProfile, _activeThreads)
+*/
 async function assembleBuildContext({ filePaths, githubToken, supabaseUrl, supabaseKey, ralphGlobals }) {
-  const fileContents = await Promise.all(
-    filePaths.map((p) => fetchFileContent(p, githubToken))
-  );
+ const fileContents = await Promise.all(
+   filePaths.map((p) => fetchFileContent(p, githubToken))
+ );
 
-  const recentBuildSessions = await fetchRecentBuildSessions(supabaseUrl, supabaseKey, 10);
+ const recentBuildSessions = await fetchRecentBuildSessions(supabaseUrl, supabaseKey, 10);
 
-  return {
-    model: BUILD_MODEL,
-    ralphGlobals,
-    requestedFiles: fileContents,
-    recentBuildSessions,
-    openItems: OPEN_ITEMS
-  };
+ return {
+   model: BUILD_MODEL,
+   ralphGlobals,
+   requestedFiles: fileContents,
+   recentBuildSessions,
+   openItems: OPEN_ITEMS
+ };
 }
 
 /**
- * Build the system prompt block for a /build session.
- */
+* Build the system prompt block for a /build session.
+*/
 function buildModeSystemPrompt(context) {
-  const fileBlocks = context.requestedFiles
-    .map((f) =>
-      f.error
-        ? `--- FILE: ${f.path} (ERROR: ${f.error}) ---`
-        : `--- FILE: ${f.path} ---\n${f.content}`
-    )
-    .join("\n\n");
+ const fileBlocks = context.requestedFiles
+   .map((f) =>
+     f.error
+       ? `--- FILE: ${f.path} (ERROR: ${f.error}) ---`
+       : `--- FILE: ${f.path} ---\n${f.content}`
+   )
+   .join("\n\n");
 
-  const sessionBlocks = context.recentBuildSessions
-    .map(
-      (s) =>
-        `[${s.created_at}] decisions: ${s.decisions_made || "—"} | files: ${
-          s.files_changed || "—"
-        } | next: ${s.next_action || "—"}`
-    )
-    .join("\n");
+ const sessionBlocks = context.recentBuildSessions
+   .map(
+     (s) =>
+       `[${s.created_at}] decisions: ${s.decisions_made || "—"} | files: ${
+         s.files_changed || "—"
+       } | next: ${s.next_action || "—"}`
+   )
+   .join("\n");
 
-  const openItemsBlock = context.openItems.map((i) => `- ${i}`).join("\n");
+ const openItemsBlock = context.openItems.map((i) => `- ${i}`).join("\n");
 
-  return `
+ return `
 === /build MODE ACTIVE ===
 Model: ${context.model}
 
@@ -133,6 +133,16 @@ If a file is NOT present in your REQUESTED FILES block below, you cannot see
 its contents. Do not infer, reconstruct, or assume what it contains. State
 explicitly: "I don't have [filename] in context — please fetch it before I
 propose changes to it."
+
+CRITICAL RULE — NO TOOLS:
+You do not have access to any tools. Do not attempt to call readFile, fetchFile,
+or any other tool or function. All file contents you need are already provided
+in the REQUESTED FILES block below — they were fetched before this session
+started. When a change is approved, output the complete modified file as a
+code block so David can copy and commit it directly.
+NOTE: This constraint exists because the tool layer is not yet fully built.
+In a future version of Mavis, you will have real readFile/writeFile tools
+and this instruction will be removed.
 
 LIVING DOCUMENT SUMMARY (general Mavis context, may include other-project mentions):
 ${context.ralphGlobals._livingDocSummary || "(none loaded)"}
@@ -165,31 +175,31 @@ Every response that proposes a code change MUST end with this block:
 Rules:
 1. One file per proposal. Multi-file changes get multiple bullets under the same block.
 2. Short confirmations ("yes," "go ahead," "looks good") are valid ONLY against
-   the proposal block in the immediately preceding message. If the preceding
-   message did not contain a proposal block, ask: "Which proposal? Can you
-   restate what you'd like done?"
+  the proposal block in the immediately preceding message. If the preceding
+  message did not contain a proposal block, ask: "Which proposal? Can you
+  restate what you'd like done?"
 3. When confirmation is received, your FIRST line must be:
-   "Approved: [restate the specific action from the block above]" — before any code.
+  "Approved: [restate the specific action from the block above]" — before any code.
 === END /build CONTEXT ===
 `.trim();
 }
 
 /**
- * Flag for Fred: this session should write a build-type exit record
- * with decisions_made, files_changed, next_action populated.
- */
+* Flag for Fred: this session should write a build-type exit record
+* with decisions_made, files_changed, next_action populated.
+*/
 function markBuildSession(session) {
-  session.session_type = "build";
-  return session;
+ session.session_type = "build";
+ return session;
 }
 
 module.exports = {
-  detectBuildTrigger,
-  fetchFileContent,
-  fetchRecentBuildSessions,
-  assembleBuildContext,
-  buildModeSystemPrompt,
-  markBuildSession,
-  BUILD_MODEL,
-  OPEN_ITEMS
+ detectBuildTrigger,
+ fetchFileContent,
+ fetchRecentBuildSessions,
+ assembleBuildContext,
+ buildModeSystemPrompt,
+ markBuildSession,
+ BUILD_MODEL,
+ OPEN_ITEMS
 };
