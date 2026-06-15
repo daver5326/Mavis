@@ -89,19 +89,6 @@ async function appendProgress(thread, summary, label) {
 
 // ─── SESSIONS ────────────────────────────────────────────────────────────────
 
-async function saveSession(rawLog) {
- // TODO (medium): generate real summary via LLM instead of slice
- try {
-   await db.from('sessions').insert([{
-     raw_log: rawLog,
-     summary: rawLog.slice(0, 500),
-     key_decisions: '',
-     patterns_observed: '',
-     project_tags: []
-   }]);
- } catch(e) { console.error('saveSession error:', e); }
-}
-
 async function loadRecentSessions(limit = 3) {
  try {
    const result = await db
