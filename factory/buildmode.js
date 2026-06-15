@@ -47,7 +47,7 @@ async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis",
     return { path: filePath, error: `Failed to fetch (${res.status})` };
   }
   const data = await res.json();
-  const content = Buffer.from(data.content, "base64").toString("utf-8");
+  const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8");
   return { path: filePath, content };
 }
 
