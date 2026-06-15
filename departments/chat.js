@@ -26,6 +26,7 @@ function parseBuildPaths(text) {
 }
 
 async function handleBuildMode(text) {
+ window._buildModeActive = true;
  initSessionId();
  const msgContainer = document.getElementById('dashboard-messages');
 
@@ -114,6 +115,9 @@ if (currentView === 'dashboard') {
   initSessionId();
   showDashboardMessage('user', text);
   if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
+
+  // ── Build mode sticky routing ─────────────────────────────────────────
+  if (window._buildModeActive) { handleBuildMode(text); return; }
 
   // ── Explicit triggers ─────────────────────────────────────────────────
   const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
@@ -282,6 +286,7 @@ async function endSession() {
  window._sessionId = null;
  window._sessionType = null;
  window._buildChatHistory = [];
+ window._buildModeActive = false;
 }
 
 async function autoSaveProgress() {
