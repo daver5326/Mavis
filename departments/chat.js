@@ -27,19 +27,13 @@ function isBuildConfirmation(text) {
 // ── Extract file path and code block from last Opus response ──────────────────
 
 function extractBuildProposal(history) {
- // Walk back through build history to find last assistant message with a code block
  for (let i = history.length - 1; i >= 0; i--) {
    const msg = history[i];
    if (msg.role !== 'assistant') continue;
-
-   // Extract file path from proposal block — "File: `path/to/file.js`"
    const pathMatch = msg.content.match(/File:\s*`([^`]+)`/);
    if (!pathMatch) continue;
-
-   // Extract code block — ```js ... ``` or ``` ... ```
    const codeMatch = msg.content.match(/```(?:js|javascript)?\n([\s\S]+?)```/);
    if (!codeMatch) continue;
-
    return {
      path: pathMatch[1],
      content: codeMatch[1]
@@ -63,7 +57,7 @@ async function handleBuildMode(text) {
 
  // ── Commit path — confirmation of a pending proposal ──────────────────────
  const hasFilePath = text.split(/\s+/).some(t => t.includes('/') || (t.includes('.') && t.length > 3));
-if (!hasFilePath && isBuildConfirmation(text) && window._buildChatHistory && window._buildChatHistory.length > 0) {
+ if (!hasFilePath && isBuildConfirmation(text) && window._buildChatHistory && window._buildChatHistory.length > 0) {
    const proposal = extractBuildProposal(window._buildChatHistory);
    if (proposal) {
      const committing = document.createElement('div');
@@ -95,7 +89,7 @@ if (!hasFilePath && isBuildConfirmation(text) && window._buildChatHistory && win
        }
      } catch (e) {
        committing.remove();
-       showDashboardMessage('assistant', `Commit error: ${e.message}`);
+       showDashboardMessage('assistant', 'Commit error: ' + e.message + ' | stack: ' + (e.stack || 'none').slice(0, 200));
      }
      return;
    }
@@ -164,7 +158,7 @@ if (!hasFilePath && isBuildConfirmation(text) && window._buildChatHistory && win
 
  } catch (e) {
    thinking.remove();
-   showDashboardMessage('assistant', 'Build mode error: ' + e.message);
+   showDashboardMessage('assistant', 'Build mode error: ' + e.message + ' | stack: ' + (e.stack || 'none').slice(0, 200));
  }
 }
 
