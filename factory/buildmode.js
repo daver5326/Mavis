@@ -17,10 +17,6 @@ const OPEN_ITEMS = [
  "[PARKED] Model routing logic — revisit once multiple AI features exist"
 ];
 
-/**
-* Detect /build trigger and parse optional file paths.
-* Returns { isBuild: bool, filePaths: string[] }
-*/
 function detectBuildTrigger(message) {
  const trimmed = message.trim();
  if (!trimmed.toLowerCase().startsWith("/build")) {
@@ -31,10 +27,6 @@ function detectBuildTrigger(message) {
  return { isBuild: true, filePaths };
 }
 
-/**
-* Fetch raw file content from GitHub (self-contained, no agent.js dependency).
-* Requires GITHUB_TOKEN and repo info from env/config.
-*/
 async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis", branch = "main") {
  const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
  const res = await fetch(url, {
@@ -51,10 +43,6 @@ async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis",
  return { path: filePath, content };
 }
 
-/**
-* Pull last N build-type session records via Supabase REST (PostgREST).
-* Self-contained — no @supabase/supabase-js dependency required.
-*/
 async function fetchRecentBuildSessions(supabaseUrl, supabaseKey, limit = 10) {
  const url = `${supabaseUrl}/rest/v1/sessions?session_type=eq.build&order=created_at.desc&limit=${limit}&select=session_type,decisions_made,files_changed,next_action,created_at`;
  const res = await fetch(url, {
@@ -69,11 +57,6 @@ async function fetchRecentBuildSessions(supabaseUrl, supabaseKey, limit = 10) {
  return res.json();
 }
 
-/**
-* Assemble full /build context.
-* ralphGlobals: the existing six globals Ralph populates at boot
-*   (_livingDocSummary, _councilPersonas, _recentSessions, _repoMap, _davidProfile, _activeThreads)
-*/
 async function assembleBuildContext({ filePaths, githubToken, supabaseUrl, supabaseKey, ralphGlobals }) {
  const fileContents = await Promise.all(
    filePaths.map((p) => fetchFileContent(p, githubToken))
@@ -90,9 +73,6 @@ async function assembleBuildContext({ filePaths, githubToken, supabaseUrl, supab
  };
 }
 
-/**
-* Build the system prompt block for a /build session.
-*/
 function buildModeSystemPrompt(context) {
  const fileBlocks = context.requestedFiles
    .map((f) =>
@@ -139,7 +119,7 @@ You do not have access to any tools. Do not attempt to call readFile, fetchFile,
 or any other tool or function. All file contents you need are already provided
 in the REQUESTED FILES block below — they were fetched before this session
 started. When a change is approved, output the complete modified file as a
-code block so David can copy and commit it directly.
+code block so Mavis can commit it directly.
 NOTE: This constraint exists because the tool layer is not yet fully built.
 In a future version of Mavis, you will have real readFile/writeFile tools
 and this instruction will be removed.
@@ -160,34 +140,29 @@ OPEN / PARKED ITEMS:
 ${openItemsBlock}
 
 Working protocol: full file replacements for large files, one file at a time,
-full path before every edit, "C" = committed, "FF" = send full file.
+full path before every edit.
 
 PROPOSAL AND CONFIRMATION PROTOCOL (mandatory, no exceptions):
-Every response that proposes a code change MUST end with this block:
+Every response that proposes a code change MUST end with this exact block:
 
 ---
 **If you approve:**
 - File: \`path/to/file.js\`
 - Action: [one specific, self-contained description of what changes]
 - Nothing else changes
+
+Ready to make this change? Type **yes** — or ask me anything first.
 ---
 
 Rules:
-1. One file per proposal. Multi-file changes get multiple bullets under the same block.
-2. Short confirmations ("yes," "go ahead," "looks good") are valid ONLY against
-  the proposal block in the immediately preceding message. If the preceding
-  message did not contain a proposal block, ask: "Which proposal? Can you
-  restate what you'd like done?"
-3. When confirmation is received, your FIRST line must be:
+1. One file per proposal.
+2. When **yes** is received, commit the file. Your FIRST line must be:
   "Approved: [restate the specific action from the block above]" — before any code.
+3. Any other reply is treated as a question — answer it and re-present the proposal block.
 === END /build CONTEXT ===
 `.trim();
 }
 
-/**
-* Flag for Fred: this session should write a build-type exit record
-* with decisions_made, files_changed, next_action populated.
-*/
 function markBuildSession(session) {
  session.session_type = "build";
  return session;
