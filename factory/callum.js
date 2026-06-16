@@ -6,20 +6,14 @@ const callum = {
 
   ready: false,
 
-  // ─── COLD START ──────────────────────────────────────────────────────────
-  // Called during boot sequence after Ralph. Loads Callum's persistent state
-  // from Supabase. Does NOT trigger an audit — that requires explicit command.
-
   async wakeUp() {
     try {
       await Promise.all([
         this.loadFileHealth(),
         this.loadRules()
       ]);
-
       this.ready = true;
       return { ready: true };
-
     } catch (e) {
       console.error('Callum wake-up error:', e);
       this.ready = false;
@@ -27,19 +21,12 @@ const callum = {
     }
   },
 
-  // ─── LOAD FILE HEALTH ────────────────────────────────────────────────────
-  // Reads callum_files from Supabase. Callum's persistent codebase memory.
-
   async loadFileHealth() {
     try {
       const res = await fetch('/api/supabase-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'select',
-          table: 'callum_files',
-          filters: {}
-        })
+        body: JSON.stringify({ action: 'select', table: 'callum_files', filters: {} })
       });
       const data = await res.json();
       window._callumFiles = data.data || [];
@@ -49,19 +36,12 @@ const callum = {
     }
   },
 
-  // ─── LOAD RULES ──────────────────────────────────────────────────────────
-  // Reads callum_rules — accumulated codebase-specific architectural knowledge.
-
   async loadRules() {
     try {
       const res = await fetch('/api/supabase-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'select',
-          table: 'callum_rules',
-          filters: {}
-        })
+        body: JSON.stringify({ action: 'select', table: 'callum_rules', filters: {} })
       });
       const data = await res.json();
       window._callumRules = data.data || [];
@@ -70,9 +50,6 @@ const callum = {
       window._callumRules = [];
     }
   },
-
-  // ─── DETECT CALLUM TRIGGER ───────────────────────────────────────────────
-  // Returns { isCallum: true, command, args } or { isCallum: false }
 
   detectCallumTrigger(message) {
     const trimmed = message.trim().toLowerCase();
@@ -87,16 +64,15 @@ const callum = {
   },
 
   // ─── ROUTE CALLUM COMMAND ────────────────────────────────────────────────
-  // Dispatches to the correct server-side handler via api/callum-audit.
-  // All heavy work is server-side. Callum.js owns routing only.
+  // Audit is handled separately via runAudit(). All other commands route here.
 
   async routeCommand(command, args) {
-    const validCommands = ['audit', 'status', 'file', 'diff', 'diagram', 'plan'];
+    const validCommands = ['status', 'file', 'diff', 'diagram', 'plan'];
 
     if (!validCommands.includes(command)) {
       return {
         success: false,
-        message: `Unknown command: /callum ${command}. Valid commands: ${validCommands.join(', ')}`
+        message: `Unknown command: /callum ${command}. Valid commands: audit, ${validCommands.join(', ')}`
       };
     }
 
@@ -120,9 +96,56 @@ const callum = {
     }
   },
 
-  // ─── GET STATUS SUMMARY ──────────────────────────────────────────────────
-  // Quick read from window._callumFiles. No server call needed.
-  // Used by other modules to surface Callum's current known state.
+  // ─── RUN AUDIT ───────────────────────────────────────────────────────────
+  // Queue-based. Seeds queue, polls process until done.
+  // onProgress(message) called after each batch for live UI updates.
+
+  async runAudit(onProgress) {
+    try {
+      onProgress('Callum: Reading repo file list...');
+
+      const queueRes = await fetch('/api/callum-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'queue' })
+      });
+      const queueData = await queueRes.json();
+
+      if (!queueData.success) {
+        return { success: false, message: queueData.error || 'Queue seed failed' };
+      }
+
+      const total = queueData.queued;
+      let processed = 0;
+      onProgress(`Callum: ${total} files queued. Starting analysis...`);
+
+      let done = false;
+      while (!done) {
+        const batchRes = await fetch('/api/callum-audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: 'process' })
+        });
+        const batchData = await batchRes.json();
+
+        if (!batchData.success) {
+          return { success: false, message: batchData.error || 'Batch processing failed' };
+        }
+
+        processed += batchData.processed || 0;
+        done = batchData.done;
+
+        const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+        onProgress(`Callum: Auditing... ${processed}/${total} files (${pct}%)`);
+      }
+
+      return { success: true, command: 'audit', filesAudited: processed };
+
+    } catch (e) {
+      console.error('Callum: runAudit failed', e);
+      return { success: false, message: `Audit failed: ${e.message}` };
+    }
+  },
 
   getStatusSummary() {
     const files = window._callumFiles || [];
