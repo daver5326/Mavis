@@ -3,8 +3,14 @@
 // Accepts { command, args } and dispatches to the correct handler.
 // Reads files via GitHub API. Analyzes via Claude. Writes to Supabase.
 // Self-contained — no agent.js dependency.
+//
+// AUDIT FLOW (queue-based, no timeout risk):
+//   1. /callum audit → seeds callum_queue with all file paths, returns immediately
+//   2. Client polls → POST { command: 'process' } → processes batch of 5, returns progress
+//   3. Client repeats until { done: true }
 
-const CALLUM_MODEL = 'claude-sonnet-4-6'; // Sonnet for audit analysis — cost-conscious
+const CALLUM_MODEL = 'claude-sonnet-4-6';
+const BATCH_SIZE = 5;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -31,12 +37,13 @@ module.exports = async function handler(req, res) {
     const ctx = { githubToken, repo, branch, supabaseUrl, supabaseKey, claudeKey };
 
     switch (command) {
-      case 'audit': return await runFullAudit(ctx, res);
-      case 'status': return await runStatus(ctx, res);
-      case 'file': return await runFileAudit(ctx, args, res);
-      case 'diff': return await runDiff(ctx, res);
+      case 'queue':   return await seedQueue(ctx, res);
+      case 'process': return await processBatch(ctx, res);
+      case 'status':  return await runStatus(ctx, res);
+      case 'file':    return await runFileAudit(ctx, args, res);
+      case 'diff':    return await runDiff(ctx, res);
       case 'diagram': return await runDiagram(ctx, res);
-      case 'plan': return await runPlan(ctx, res);
+      case 'plan':    return await runPlan(ctx, res);
       default:
         return res.status(400).json({ error: `Unknown command: ${command}` });
     }
@@ -208,30 +215,97 @@ async function upsertFileHealth(finding, sessionId, { supabaseUrl, supabaseKey }
   }
 }
 
-// ─── COMMAND: AUDIT ──────────────────────────────────────────────────────────
+// ─── COMMAND: QUEUE ──────────────────────────────────────────────────────────
 
-async function runFullAudit(ctx, res) {
-  const sessionId = `callum-audit-${Date.now()}`;
+async function seedQueue(ctx, res) {
+  const { supabaseUrl, supabaseKey } = ctx;
+
+  // Clear previous unprocessed queue
+  await fetch(`${supabaseUrl}/rest/v1/callum_queue?processed=eq.false`, {
+    method: 'DELETE',
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`
+    }
+  });
+
   const filePaths = await fetchRepoFileList(ctx);
-  const results = { stable: 0, fragile: 0, broken: 0, unknown: 0, errors: [] };
 
-  for (const filePath of filePaths) {
+  await fetch(`${supabaseUrl}/rest/v1/callum_queue`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    },
+    body: JSON.stringify(filePaths.map(p => ({ file_path: p, processed: false })))
+  });
+
+  return res.status(200).json({
+    success: true,
+    command: 'queue',
+    queued: filePaths.length
+  });
+}
+
+// ─── COMMAND: PROCESS ────────────────────────────────────────────────────────
+
+async function processBatch(ctx, res) {
+  const { supabaseUrl, supabaseKey } = ctx;
+  const sessionId = `callum-audit-${Date.now()}`;
+
+  const queueRes = await fetch(
+    `${supabaseUrl}/rest/v1/callum_queue?processed=eq.false&order=created_at.asc&limit=${BATCH_SIZE}&select=id,file_path`,
+    { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+  );
+  const batch = await queueRes.json();
+
+  if (!batch.length) {
+    return res.status(200).json({ success: true, command: 'process', done: true, processed: 0 });
+  }
+
+  const results = { stable: 0, fragile: 0, broken: 0, unknown: 0 };
+  await Promise.all(batch.map(async (item) => {
     try {
-      const file = await fetchFileContent(filePath, ctx);
+      const file = await fetchFileContent(item.file_path, ctx);
       const finding = await analyzeFile(file, ctx);
       await upsertFileHealth(finding, sessionId, ctx);
       results[finding.status] = (results[finding.status] || 0) + 1;
     } catch (e) {
-      results.errors.push(`${filePath}: ${e.message}`);
+      results.unknown = (results.unknown || 0) + 1;
     }
-  }
+
+    await fetch(`${supabaseUrl}/rest/v1/callum_queue?id=eq.${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ processed: true })
+    });
+  }));
+
+  const remainingRes = await fetch(
+    `${supabaseUrl}/rest/v1/callum_queue?processed=eq.false&select=id`,
+    {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        Prefer: 'count=exact'
+      }
+    }
+  );
+  const remaining = parseInt(remainingRes.headers.get('content-range')?.split('/')[1] || '0');
 
   return res.status(200).json({
     success: true,
-    command: 'audit',
-    filesAudited: filePaths.length,
-    results,
-    sessionId
+    command: 'process',
+    done: remaining === 0,
+    processed: batch.length,
+    remaining,
+    results
   });
 }
 
