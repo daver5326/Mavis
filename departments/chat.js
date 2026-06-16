@@ -56,8 +56,12 @@ async function handleCallumCommand(text) {
   const msgContainer = document.getElementById('dashboard-messages');
   const { command, args } = callum.detectCallumTrigger(text);
 
+  // DEBUG — remove after diagnosis
+  showDashboardMessage('assistant', `DEBUG: command="${command}" args=${JSON.stringify(args)}`);
+
   // ── Audit — async polling with live progress updates ──────────────────
   if (command === 'audit') {
+
     const progressEl = document.createElement('div');
     progressEl.className = 'message assistant thinking';
     progressEl.textContent = 'Callum: Starting audit...';
