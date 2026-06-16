@@ -25,6 +25,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // ── Ralph runs first. Nothing boots until he's done. ─────────────────────
   window._sessionLog = [];
   const ralphStatus = await ralph.wakeUp();
+  await callum.wakeUp();
 
   if (ralphStatus.newDay) {
     const brief = ralph.getBrief();
