@@ -54,6 +54,32 @@ function parseBuildPaths(text) {
 
 async function handleCallumCommand(text) {
   const msgContainer = document.getElementById('dashboard-messages');
+  const { command, args } = callum.detectCallumTrigger(text);
+
+  // ── Audit — async polling with live progress updates ──────────────────
+  if (command === 'audit') {
+    const progressEl = document.createElement('div');
+    progressEl.className = 'message assistant thinking';
+    progressEl.textContent = 'Callum: Starting audit...';
+    msgContainer.appendChild(progressEl);
+    msgContainer.scrollTop = 999999;
+
+    const result = await callum.runAudit((message) => {
+      progressEl.textContent = message;
+      msgContainer.scrollTop = 999999;
+    });
+
+    progressEl.classList.remove('thinking');
+
+    if (!result.success) {
+      progressEl.textContent = `Callum audit failed: ${result.message}`;
+    } else {
+      progressEl.textContent = `Callum audit complete. ${result.filesAudited} files analyzed. Run /callum status to see findings.`;
+    }
+    return;
+  }
+
+  // ── All other commands — synchronous ──────────────────────────────────
   const thinking = document.createElement('div');
   thinking.className = 'message assistant thinking';
   thinking.textContent = 'Callum is on it...';
@@ -61,7 +87,6 @@ async function handleCallumCommand(text) {
   msgContainer.scrollTop = 999999;
 
   try {
-    const { command, args } = callum.detectCallumTrigger(text);
     const result = await callum.routeCommand(command, args);
     thinking.remove();
 
@@ -77,9 +102,6 @@ async function handleCallumCommand(text) {
       if (broken.length) out += `BROKEN:\n${broken.map(f => `• ${f.file_path} — ${f.known_issues}`).join('\n')}\n\n`;
       if (fragile.length) out += `FRAGILE:\n${fragile.map(f => `• ${f.file_path} — ${f.known_issues}`).join('\n')}`;
       showDashboardMessage('assistant', out.trim());
-    } else if (result.command === 'audit') {
-      const { filesAudited, results } = result;
-      showDashboardMessage('assistant', `Callum audit complete. ${filesAudited} files read.\nStable: ${results.stable} | Fragile: ${results.fragile} | Broken: ${results.broken} | Unknown: ${results.unknown}${results.errors.length ? `\nErrors: ${results.errors.length}` : ''}\n\nRun /callum status to see findings.`);
     } else if (result.command === 'plan') {
       if (result.message) {
         showDashboardMessage('assistant', `Callum: ${result.message}`);
@@ -110,7 +132,6 @@ async function handleBuildMode(text) {
   initSessionId();
   const msgContainer = document.getElementById('dashboard-messages');
 
-  // ── Commit path — confirmation of a pending proposal ──────────────────────
   const hasFilePath = text.split(/\s+/).some(t => t.includes('/') || (t.includes('.') && t.length > 3));
   if (!hasFilePath && isBuildConfirmation(text) && window._buildChatHistory && window._buildChatHistory.length > 0) {
     const proposal = extractBuildProposal(window._buildChatHistory);
@@ -231,10 +252,8 @@ async function sendMessage(inputId) {
     showDashboardMessage('user', text);
     if (window._sessionLog) window._sessionLog.push({ role: 'user', content: text });
 
-    // ── Build mode sticky routing ─────────────────────────────────────────
     if (window._buildModeActive) { handleBuildMode(text); return; }
 
-    // ── Explicit triggers ─────────────────────────────────────────────────
     const agentTriggers = ['/agent ', 'agent: ', 'agent do '];
     const isAgentCall = agentTriggers.some(t => text.toLowerCase().startsWith(t));
     if (isAgentCall) { handleAgentAction(text); return; }
@@ -242,14 +261,12 @@ async function sendMessage(inputId) {
     if (text.toLowerCase().startsWith('/callum')) { handleCallumCommand(text); return; }
     if (text.toLowerCase().startsWith('/build')) { handleBuildMode(text); return; }
 
-    // ── LLM intent classification ─────────────────────────────────────────
     const intent = await detectIntent(text);
     if (intent === 'build_mode') { handleBuildMode(text); return; }
     if (intent === 'thread_update') { handleThreadUpdate(text); return; }
     if (intent === 'new_project') { handleNewProjectRequest(text); return; }
     if (intent === 'build_request') { handleAgentAction(text); return; }
 
-    // ── Regular chat ──────────────────────────────────────────────────────
     const threads = await fetchAllThreads();
     const repoMap = window._repoMap || null;
 
