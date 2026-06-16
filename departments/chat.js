@@ -9,11 +9,27 @@ if (agentTriggers.some(t => text.toLowerCase().startsWith(t))) return false;
 return text.trim().split(/\s+/).length > ROUTING_WORD_THRESHOLD;
 }
 
+// ── UUID generation with fallback for non-secure contexts ─────────────────────
+
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    try {
+      return crypto.randomUUID();
+    } catch (e) {
+      // fall through to polyfill
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 // ── Session ID — set once per session, cleared only in endSession ─────────────
 
 function initSessionId() {
   if (!window._sessionId) {
-    window._sessionId = crypto.randomUUID();
+    window._sessionId = generateUUID();
   }
 }
 
