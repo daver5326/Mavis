@@ -63,9 +63,6 @@ const callum = {
     return { isCallum: true, command, args };
   },
 
-  // ─── ROUTE CALLUM COMMAND ────────────────────────────────────────────────
-  // Audit is handled separately via runAudit(). All other commands route here.
-
   async routeCommand(command, args) {
     const validCommands = ['status', 'file', 'diff', 'diagram', 'plan'];
 
@@ -98,6 +95,7 @@ const callum = {
 
   // ─── RUN AUDIT ───────────────────────────────────────────────────────────
   // Queue-based. Seeds queue, polls process until done.
+  // Retries failed batches up to 2 times before giving up.
   // onProgress(message) called after each batch for live UI updates.
 
   async runAudit(onProgress) {
@@ -117,26 +115,44 @@ const callum = {
 
       const total = queueData.queued;
       let processed = 0;
+      let retries = 0;
       onProgress(`Callum: ${total} files queued. Starting analysis...`);
 
       let done = false;
       while (!done) {
-        const batchRes = await fetch('/api/callum-audit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'process' })
-        });
-        const batchData = await batchRes.json();
+        try {
+          const batchRes = await fetch('/api/callum-audit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: 'process' })
+          });
+          const batchData = await batchRes.json();
 
-        if (!batchData.success) {
-          return { success: false, message: batchData.error || 'Batch processing failed' };
+          if (!batchData.success) {
+            if (retries < 2) {
+              retries++;
+              onProgress(`Callum: Retrying batch (attempt ${retries})...`);
+              continue;
+            }
+            return { success: false, message: batchData.error || 'Batch processing failed after retries' };
+          }
+
+          retries = 0;
+          processed += batchData.processed || 0;
+          done = batchData.done;
+
+          const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+          onProgress(`Callum: Auditing... ${processed}/${total} files (${pct}%)`);
+
+        } catch (batchErr) {
+          if (retries < 2) {
+            retries++;
+            onProgress(`Callum: Network error, retrying (attempt ${retries})...`);
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+          return { success: false, message: `Batch failed after retries: ${batchErr.message}` };
         }
-
-        processed += batchData.processed || 0;
-        done = batchData.done;
-
-        const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-        onProgress(`Callum: Auditing... ${processed}/${total} files (${pct}%)`);
       }
 
       return { success: true, command: 'audit', filesAudited: processed };
