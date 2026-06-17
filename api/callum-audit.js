@@ -1,16 +1,17 @@
 // ─── api/callum-audit.js ─────────────────────────────────────────────────────
 // Server-side endpoint for all /callum commands.
 // Accepts { command, args } and dispatches to the correct handler.
-// Reads files via GitHub API. Analyzes via Claude. Writes to Supabase.
+// Reads files via GitHub API. Analyzes via Claude Batch API. Writes to Supabase.
 // Self-contained — no agent.js dependency.
 //
-// AUDIT FLOW (queue-based, no timeout risk):
-//   1. /callum audit → seeds callum_queue with all file paths, returns immediately
-//   2. Client polls → POST { command: 'process' } → processes batch of 5, returns progress
-//   3. Client repeats until { done: true }
+// AUDIT FLOW (Batch API, 50% cost reduction):
+//   1. /callum audit → seeds callum_queue, submits Anthropic batch job, returns immediately
+//   2. Client polls → POST { command: 'batch-poll' } → checks status, writes results if done
+//   3. Client repeats every 30s until { done: true }
 
 const CALLUM_MODEL = 'claude-sonnet-4-6';
 const BATCH_SIZE = 5;
+const ANTHROPIC_API = 'https://api.anthropic.com/v1';
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -37,13 +38,15 @@ module.exports = async function handler(req, res) {
     const ctx = { githubToken, repo, branch, supabaseUrl, supabaseKey, claudeKey };
 
     switch (command) {
-      case 'queue':   return await seedQueue(ctx, res);
-      case 'process': return await processBatch(ctx, res);
-      case 'status':  return await runStatus(ctx, res);
-      case 'file':    return await runFileAudit(ctx, args, res);
-      case 'diff':    return await runDiff(ctx, res);
-      case 'diagram': return await runDiagram(ctx, res);
-      case 'plan':    return await runPlan(ctx, res);
+      case 'queue':        return await seedQueue(ctx, res);
+      case 'batch-submit': return await submitBatch(ctx, res);
+      case 'batch-poll':   return await pollBatch(ctx, res);
+      case 'process':      return await processBatch(ctx, res);
+      case 'status':       return await runStatus(ctx, res);
+      case 'file':         return await runFileAudit(ctx, args, res);
+      case 'diff':         return await runDiff(ctx, res);
+      case 'diagram':      return await runDiagram(ctx, res);
+      case 'plan':         return await runPlan(ctx, res);
       default:
         return res.status(400).json({ error: `Unknown command: ${command}` });
     }
@@ -90,25 +93,16 @@ async function fetchFileContent(filePath, { githubToken, repo, branch }) {
   return { path: filePath, content, sha: data.sha };
 }
 
-// ─── ANALYZE FILE WITH CLAUDE ────────────────────────────────────────────────
+// ─── BUILD ANALYSIS PROMPT ───────────────────────────────────────────────────
 
-async function analyzeFile(file, { claudeKey }) {
-  if (file.error) {
-    return {
-      path: file.path,
-      status: 'unknown',
-      known_issues: file.error,
-      dependencies: '',
-      notes: 'Could not fetch file content'
-    };
-  }
-
-  const prompt = `You are Callum, a precise Scottish code architect auditing the Mavis codebase.
+function buildAnalysisPrompt(file) {
+  if (file.error) return null;
+  return `You are Callum, a precise Scottish code architect auditing the Mavis codebase.
 Analyze this file and respond ONLY with a JSON object — no preamble, no markdown fences.
 
 File: ${file.path}
 Content:
-${file.content.slice(0, 8000)}${file.content.length > 8000 ? '\n[TRUNCATED]' : ''}
+${file.content.slice(0, 3000)}${file.content.length > 3000 ? '\n[TRUNCATED]' : ''}
 
 Respond with exactly this structure:
 {
@@ -123,53 +117,6 @@ Status definitions:
 - fragile: works but has coupling issues, mixed responsibilities, or known bugs
 - broken: has confirmed bugs, missing dependencies, or will not execute correctly
 - unknown: cannot assess from content alone`;
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': claudeKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: CALLUM_MODEL,
-      max_tokens: 500,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  if (!response.ok) {
-    return {
-      path: file.path,
-      status: 'unknown',
-      known_issues: `Claude analysis failed (${response.status})`,
-      dependencies: '',
-      notes: ''
-    };
-  }
-
-  const data = await response.json();
-  const text = data.content?.[0]?.text || '{}';
-
-  try {
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-    return {
-      path: file.path,
-      status: parsed.status || 'unknown',
-      known_issues: parsed.known_issues || '',
-      dependencies: parsed.dependencies || '',
-      notes: parsed.notes || ''
-    };
-  } catch {
-    return {
-      path: file.path,
-      status: 'unknown',
-      known_issues: 'Could not parse analysis response',
-      dependencies: '',
-      notes: text.slice(0, 200)
-    };
-  }
 }
 
 // ─── WRITE TO SUPABASE ───────────────────────────────────────────────────────
@@ -220,13 +167,9 @@ async function upsertFileHealth(finding, sessionId, { supabaseUrl, supabaseKey }
 async function seedQueue(ctx, res) {
   const { supabaseUrl, supabaseKey } = ctx;
 
-  // Clear previous unprocessed queue
   await fetch(`${supabaseUrl}/rest/v1/callum_queue?processed=eq.false`, {
     method: 'DELETE',
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`
-    }
+    headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` }
   });
 
   const filePaths = await fetchRepoFileList(ctx);
@@ -242,17 +185,190 @@ async function seedQueue(ctx, res) {
     body: JSON.stringify(filePaths.map(p => ({ file_path: p, processed: false })))
   });
 
+  return res.status(200).json({ success: true, command: 'queue', queued: filePaths.length });
+}
+
+// ─── COMMAND: BATCH-SUBMIT ───────────────────────────────────────────────────
+
+async function submitBatch(ctx, res) {
+  const { supabaseUrl, supabaseKey, claudeKey } = ctx;
+
+  const queueRes = await fetch(
+    `${supabaseUrl}/rest/v1/callum_queue?processed=eq.false&select=id,file_path`,
+    { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+  );
+  const queueItems = await queueRes.json();
+
+  if (!queueItems.length) {
+    return res.status(200).json({ success: true, command: 'batch-submit', queued: 0, message: 'Queue is empty' });
+  }
+
+  // Fetch file contents in chunks of 10
+  const files = [];
+  for (let i = 0; i < queueItems.length; i += 10) {
+    const chunk = queueItems.slice(i, i + 10);
+    const fetched = await Promise.all(chunk.map(item => fetchFileContent(item.file_path, ctx)));
+    files.push(...fetched.map((f, idx) => ({ ...f, queueId: chunk[idx].id })));
+  }
+
+  const batchRequests = files
+    .filter(f => !f.error)
+    .map(f => ({
+      custom_id: f.queueId,
+      params: {
+        model: CALLUM_MODEL,
+        max_tokens: 500,
+        messages: [{ role: 'user', content: buildAnalysisPrompt(f) }]
+      }
+    }));
+
+  if (!batchRequests.length) {
+    return res.status(200).json({ success: false, command: 'batch-submit', message: 'No valid files to analyze' });
+  }
+
+  const batchRes = await fetch(`${ANTHROPIC_API}/messages/batches`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': claudeKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({ requests: batchRequests })
+  });
+
+  if (!batchRes.ok) {
+    const err = await batchRes.json().catch(() => ({}));
+    return res.status(500).json({ success: false, error: `Batch submit failed: ${err.error?.message || batchRes.status}` });
+  }
+
+  const batchData = await batchRes.json();
+  const batchId = batchData.id;
+
+  await Promise.all(queueItems.map(item =>
+    fetch(`${supabaseUrl}/rest/v1/callum_queue?id=eq.${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ batch_id: batchId })
+    })
+  ));
+
   return res.status(200).json({
     success: true,
-    command: 'queue',
-    queued: filePaths.length
+    command: 'batch-submit',
+    batchId,
+    submitted: batchRequests.length,
+    status: batchData.processing_status
   });
 }
 
-// ─── COMMAND: PROCESS ────────────────────────────────────────────────────────
+// ─── COMMAND: BATCH-POLL ─────────────────────────────────────────────────────
+
+async function pollBatch(ctx, res) {
+  const { supabaseUrl, supabaseKey, claudeKey } = ctx;
+
+  const queueRes = await fetch(
+    `${supabaseUrl}/rest/v1/callum_queue?processed=eq.false&batch_id=not.is.null&limit=1&select=batch_id`,
+    { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+  );
+  const queueItems = await queueRes.json();
+
+  if (!queueItems.length) {
+    return res.status(200).json({ success: true, command: 'batch-poll', done: true, message: 'No active batch found' });
+  }
+
+  const batchId = queueItems[0].batch_id;
+
+  const statusRes = await fetch(`${ANTHROPIC_API}/messages/batches/${batchId}`, {
+    headers: { 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' }
+  });
+  const batchStatus = await statusRes.json();
+
+  if (batchStatus.processing_status !== 'ended') {
+    return res.status(200).json({
+      success: true,
+      command: 'batch-poll',
+      done: false,
+      status: batchStatus.processing_status,
+      counts: batchStatus.request_counts
+    });
+  }
+
+  const resultsRes = await fetch(batchStatus.results_url, {
+    headers: { 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' }
+  });
+  const resultsText = await resultsRes.text();
+
+  const results = resultsText
+    .split('\n')
+    .filter(Boolean)
+    .map(line => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+
+  const sessionId = `callum-batch-${Date.now()}`;
+  let written = 0;
+
+  for (const result of results) {
+    if (result.result?.type !== 'succeeded') continue;
+
+    const queueId = result.custom_id;
+    const text = result.result.message?.content?.[0]?.text || '{}';
+
+    const itemRes = await fetch(
+      `${supabaseUrl}/rest/v1/callum_queue?id=eq.${queueId}&select=file_path`,
+      { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` } }
+    );
+    const items = await itemRes.json();
+    if (!items.length) continue;
+
+    try {
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      await upsertFileHealth({
+        path: items[0].file_path,
+        status: parsed.status || 'unknown',
+        known_issues: parsed.known_issues || '',
+        dependencies: parsed.dependencies || '',
+        notes: parsed.notes || ''
+      }, sessionId, ctx);
+      written++;
+    } catch {
+      await upsertFileHealth({
+        path: items[0].file_path,
+        status: 'unknown',
+        known_issues: 'Could not parse analysis response',
+        dependencies: '',
+        notes: ''
+      }, sessionId, ctx);
+    }
+
+    await fetch(`${supabaseUrl}/rest/v1/callum_queue?id=eq.${queueId}`, {
+      method: 'PATCH',
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ processed: true })
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    command: 'batch-poll',
+    done: true,
+    filesWritten: written,
+    counts: batchStatus.request_counts
+  });
+}
+
+// ─── COMMAND: PROCESS (legacy fallback) ──────────────────────────────────────
 
 async function processBatch(ctx, res) {
-  const { supabaseUrl, supabaseKey } = ctx;
+  const { supabaseUrl, supabaseKey, claudeKey } = ctx;
   const sessionId = `callum-audit-${Date.now()}`;
 
   const queueRes = await fetch(
@@ -269,11 +385,34 @@ async function processBatch(ctx, res) {
   await Promise.all(batch.map(async (item) => {
     try {
       const file = await fetchFileContent(item.file_path, ctx);
-      const finding = await analyzeFile(file, ctx);
+      const prompt = buildAnalysisPrompt(file);
+      if (!prompt) { results.unknown++; return; }
+
+      const response = await fetch(`${ANTHROPIC_API}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': claudeKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({ model: CALLUM_MODEL, max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+      });
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || '{}';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      const finding = {
+        path: item.file_path,
+        status: parsed.status || 'unknown',
+        known_issues: parsed.known_issues || '',
+        dependencies: parsed.dependencies || '',
+        notes: parsed.notes || ''
+      };
       await upsertFileHealth(finding, sessionId, ctx);
       results[finding.status] = (results[finding.status] || 0) + 1;
-    } catch (e) {
-      results.unknown = (results.unknown || 0) + 1;
+    } catch {
+      results.unknown++;
     }
 
     await fetch(`${supabaseUrl}/rest/v1/callum_queue?id=eq.${item.id}`, {
@@ -289,13 +428,7 @@ async function processBatch(ctx, res) {
 
   const remainingRes = await fetch(
     `${supabaseUrl}/rest/v1/callum_queue?processed=eq.false&select=id`,
-    {
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        Prefer: 'count=exact'
-      }
-    }
+    { headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, Prefer: 'count=exact' } }
   );
   const remaining = parseInt(remainingRes.headers.get('content-range')?.split('/')[1] || '0');
 
@@ -343,7 +476,33 @@ async function runFileAudit(ctx, args, res) {
   }
   const sessionId = `callum-file-${Date.now()}`;
   const file = await fetchFileContent(filePath, ctx);
-  const finding = await analyzeFile(file, ctx);
+
+  if (file.error) {
+    return res.status(200).json({ success: false, command: 'file', error: file.error });
+  }
+
+  const prompt = buildAnalysisPrompt(file);
+  const response = await fetch(`${ANTHROPIC_API}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ctx.claudeKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({ model: CALLUM_MODEL, max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+  });
+
+  const data = await response.json();
+  const text = data.content?.[0]?.text || '{}';
+  const clean = text.replace(/```json|```/g, '').trim();
+  const parsed = JSON.parse(clean);
+  const finding = {
+    path: filePath,
+    status: parsed.status || 'unknown',
+    known_issues: parsed.known_issues || '',
+    dependencies: parsed.dependencies || '',
+    notes: parsed.notes || ''
+  };
   await upsertFileHealth(finding, sessionId, ctx);
   return res.status(200).json({ success: true, command: 'file', finding });
 }
@@ -381,7 +540,24 @@ async function runDiff(ctx, res) {
   for (const filePath of changedPaths) {
     if (!filePath.match(/\.(js|json|css|html|md)$/)) continue;
     const file = await fetchFileContent(filePath, ctx);
-    const finding = await analyzeFile(file, ctx);
+    if (file.error) { results.unknown++; continue; }
+    const prompt = buildAnalysisPrompt(file);
+    const response = await fetch(`${ANTHROPIC_API}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ctx.claudeKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: CALLUM_MODEL, max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '{}';
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    const finding = {
+      path: filePath,
+      status: parsed.status || 'unknown',
+      known_issues: parsed.known_issues || '',
+      dependencies: parsed.dependencies || '',
+      notes: parsed.notes || ''
+    };
     await upsertFileHealth(finding, sessionId, ctx);
     results[finding.status] = (results[finding.status] || 0) + 1;
   }
@@ -406,19 +582,14 @@ async function runDiagram(ctx, res) {
   const files = await response.json();
 
   if (!files.length) {
-    return res.status(200).json({
-      success: false,
-      command: 'diagram',
-      message: 'No audit data yet. Run /callum audit first.'
-    });
+    return res.status(200).json({ success: false, command: 'diagram', message: 'No audit data yet. Run /callum audit first.' });
   }
 
   const lines = ['graph TD'];
   files.forEach(file => {
     const node = file.file_path.replace(/[^a-zA-Z0-9]/g, '_');
     const label = file.file_path.split('/').pop();
-    const style = file.status === 'broken' ? ':::broken'
-      : file.status === 'fragile' ? ':::fragile' : '';
+    const style = file.status === 'broken' ? ':::broken' : file.status === 'fragile' ? ':::fragile' : '';
     lines.push(`  ${node}["${label}"]${style}`);
     if (file.dependencies) {
       file.dependencies.split(',').map(d => d.trim()).filter(Boolean).forEach(dep => {
@@ -443,11 +614,7 @@ async function runPlan(ctx, res) {
   const files = await response.json();
 
   if (!files.length) {
-    return res.status(200).json({
-      success: true,
-      command: 'plan',
-      message: 'No broken or fragile files found. Codebase is clean.'
-    });
+    return res.status(200).json({ success: true, command: 'plan', message: 'No broken or fragile files found. Codebase is clean.' });
   }
 
   return res.status(200).json({
