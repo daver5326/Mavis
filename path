@@ -1,0 +1,29 @@
+function showMakeItSoButton(instruction) {
+ const msgContainer = document.getElementById('dashboard-messages');
+ const div = document.createElement('div');
+ div.className = 'message assistant';
+
+ const btnRow = document.createElement('div');
+ btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px';
+
+ const makeItSoBtn = document.createElement('button');
+ makeItSoBtn.textContent = 'Make it so';
+ makeItSoBtn.style.cssText = 'background:#7c3aed;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer';
+
+ const dismissBtn = document.createElement('button');
+ dismissBtn.textContent = 'Not yet';
+ dismissBtn.style.cssText = 'background:#333;color:white;border:none;padding:8px 16px;border-radius:8px;font-size:14px;cursor:pointer';
+
+ makeItSoBtn.addEventListener('click', () => {
+   div.remove();
+   handleAgentAction(instruction);
+ });
+
+ dismissBtn.addEventListener('click', () => div.remove());
+
+ btnRow.appendChild(makeItSoBtn);
+ btnRow.appendChild(dismissBtn);
+ div.appendChild(btnRow);
+ msgContainer.appendChild(div);
+ msgContainer.scrollTop = 999999;
+}
