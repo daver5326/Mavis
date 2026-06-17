@@ -94,14 +94,17 @@ const callum = {
   },
 
   // ─── RUN AUDIT ───────────────────────────────────────────────────────────
-  // Queue-based. Seeds queue, polls process until done.
-  // Retries failed batches up to 2 times before giving up.
-  // onProgress(message) called after each batch for live UI updates.
+  // Batch API flow:
+  //   1. Seed queue with all file paths
+  //   2. Submit batch job to Anthropic (all files at once, 50% cheaper)
+  //   3. Poll every 30 seconds until batch completes
+  //   4. Results written to Supabase automatically on completion
+  // onProgress(message) called at each stage for live UI updates.
 
   async runAudit(onProgress) {
     try {
+      // Step 1 — seed queue
       onProgress('Callum: Reading repo file list...');
-
       const queueRes = await fetch('/api/callum-audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,48 +117,62 @@ const callum = {
       }
 
       const total = queueData.queued;
-      let processed = 0;
-      let retries = 0;
-      onProgress(`Callum: ${total} files queued. Starting analysis...`);
+      onProgress(`Callum: ${total} files queued. Fetching contents and submitting batch...`);
 
+      // Step 2 — submit batch job
+      const submitRes = await fetch('/api/callum-audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'batch-submit' })
+      });
+      const submitData = await submitRes.json();
+
+      if (!submitData.success) {
+        return { success: false, message: submitData.error || 'Batch submit failed' };
+      }
+
+      onProgress(`Callum: Batch submitted (${submitData.submitted} files). Waiting for results — this usually takes 2–5 minutes...`);
+
+      // Step 3 — poll every 30 seconds
       let done = false;
-      while (!done) {
+      let pollCount = 0;
+      const MAX_POLLS = 60; // 30 minutes max
+
+      while (!done && pollCount < MAX_POLLS) {
+        await new Promise(r => setTimeout(r, 30000));
+        pollCount++;
+
         try {
-          const batchRes = await fetch('/api/callum-audit', {
+          const pollRes = await fetch('/api/callum-audit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: 'process' })
+            body: JSON.stringify({ command: 'batch-poll' })
           });
-          const batchData = await batchRes.json();
+          const pollData = await pollRes.json();
 
-          if (!batchData.success) {
-            if (retries < 2) {
-              retries++;
-              onProgress(`Callum: Retrying batch (attempt ${retries})...`);
-              continue;
-            }
-            return { success: false, message: batchData.error || 'Batch processing failed after retries' };
-          }
-
-          retries = 0;
-          processed += batchData.processed || 0;
-          done = batchData.done;
-
-          const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-          onProgress(`Callum: Auditing... ${processed}/${total} files (${pct}%)`);
-
-        } catch (batchErr) {
-          if (retries < 2) {
-            retries++;
-            onProgress(`Callum: Network error, retrying (attempt ${retries})...`);
-            await new Promise(r => setTimeout(r, 1000));
+          if (!pollData.success) {
+            onProgress(`Callum: Poll error — ${pollData.message || 'unknown'}. Retrying...`);
             continue;
           }
-          return { success: false, message: `Batch failed after retries: ${batchErr.message}` };
+
+          if (pollData.done) {
+            done = true;
+            return {
+              success: true,
+              command: 'audit',
+              filesAudited: pollData.filesWritten || total
+            };
+          }
+
+          const elapsed = Math.round(pollCount * 0.5);
+          onProgress(`Callum: Still processing... (${elapsed} min elapsed)`);
+
+        } catch (pollErr) {
+          onProgress(`Callum: Network error polling — retrying in 30s...`);
         }
       }
 
-      return { success: true, command: 'audit', filesAudited: processed };
+      return { success: false, message: 'Audit timed out after 30 minutes. Run /callum status to see partial results.' };
 
     } catch (e) {
       console.error('Callum: runAudit failed', e);
