@@ -1,13 +1,15 @@
 // ─── api/callum-audit.js ─────────────────────────────────────────────────────
 // Server-side endpoint for all /callum commands.
 // Accepts { command, args } and dispatches to the correct handler.
-// Reads files via GitHub API. Analyzes via Claude Batch API. Writes to Supabase.
-// Self-contained — no agent.js dependency.
+// Reads files via shared core/fetch utility. Analyzes via Claude Batch API.
+// Writes to Supabase. Self-contained — no agent.js dependency.
 //
 // AUDIT FLOW (Batch API, 50% cost reduction):
 //   1. /callum audit → seeds callum_queue, submits Anthropic batch job, returns immediately
 //   2. Client polls → POST { command: 'batch-poll' } → checks status, writes results if done
 //   3. Client repeats every 30s until { done: true }
+
+const { fetchFileFromGitHub } = require('../core/fetch');
 
 const CALLUM_MODEL = 'claude-sonnet-4-6';
 const BATCH_SIZE = 5;
@@ -75,22 +77,6 @@ async function fetchRepoFileList({ githubToken, repo, branch }) {
     .filter(item => !item.path.startsWith('.next/'))
     .filter(item => item.path.match(/\.(js|json|css|html|md)$/))
     .map(item => item.path);
-}
-
-// ─── FETCH SINGLE FILE ───────────────────────────────────────────────────────
-
-async function fetchFileContent(filePath, { githubToken, repo, branch }) {
-  const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `token ${githubToken}`,
-      Accept: 'application/vnd.github.v3+json'
-    }
-  });
-  if (!res.ok) return { path: filePath, error: `Failed to fetch (${res.status})` };
-  const data = await res.json();
-  const content = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf-8');
-  return { path: filePath, content, sha: data.sha };
 }
 
 // ─── BUILD ANALYSIS PROMPT ───────────────────────────────────────────────────
@@ -203,12 +189,15 @@ async function submitBatch(ctx, res) {
     return res.status(200).json({ success: true, command: 'batch-submit', queued: 0, message: 'Queue is empty' });
   }
 
-  // Fetch file contents in chunks of 10
   const files = [];
   for (let i = 0; i < queueItems.length; i += 10) {
     const chunk = queueItems.slice(i, i + 10);
-    const fetched = await Promise.all(chunk.map(item => fetchFileContent(item.file_path, ctx)));
-    files.push(...fetched.map((f, idx) => ({ ...f, queueId: chunk[idx].id })));
+    const fetched = await Promise.allSettled(chunk.map(item => fetchFileFromGitHub(item.file_path)));
+    fetched.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        files.push({ ...result.value, queueId: chunk[idx].id });
+      }
+    });
   }
 
   const batchRequests = files
@@ -384,7 +373,7 @@ async function processBatch(ctx, res) {
   const results = { stable: 0, fragile: 0, broken: 0, unknown: 0 };
   await Promise.all(batch.map(async (item) => {
     try {
-      const file = await fetchFileContent(item.file_path, ctx);
+      const file = await fetchFileFromGitHub(item.file_path);
       const prompt = buildAnalysisPrompt(file);
       if (!prompt) { results.unknown++; return; }
 
@@ -475,7 +464,7 @@ async function runFileAudit(ctx, args, res) {
     return res.status(400).json({ error: '/callum file requires a file path argument' });
   }
   const sessionId = `callum-file-${Date.now()}`;
-  const file = await fetchFileContent(filePath, ctx);
+  const file = await fetchFileFromGitHub(filePath);
 
   if (file.error) {
     return res.status(200).json({ success: false, command: 'file', error: file.error });
@@ -539,7 +528,7 @@ async function runDiff(ctx, res) {
 
   for (const filePath of changedPaths) {
     if (!filePath.match(/\.(js|json|css|html|md)$/)) continue;
-    const file = await fetchFileContent(filePath, ctx);
+    const file = await fetchFileFromGitHub(filePath);
     if (file.error) { results.unknown++; continue; }
     const prompt = buildAnalysisPrompt(file);
     const response = await fetch(`${ANTHROPIC_API}/messages`, {
