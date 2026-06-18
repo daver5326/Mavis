@@ -3,16 +3,16 @@
 // Self-contained: does not depend on agent.js exports.
 // Detects /build trigger, assembles full Ralph+repo+session context,
 // flags session for Fred to write a build-type exit record.
-// test comment
 
-const BUILD_MODEL = "claude-opus-4-6"; // hardcoded per Council decision (Session 12)
+const { fetchFileFromGitHub } = require('../core/fetch');
+
+const BUILD_MODEL = "claude-opus-4-6";
 
 const OPEN_ITEMS = [
   "Routing suggestion noise — analyzeAndRoute fires on conversational messages",
   "Council button CSS conflict in thread top bar",
   "Mavis self-knowledge gap in conversational mode — fabricates architecture",
   "File path protocol not structurally enforced",
-  "Make it so button appearance inconsistent",
   "updated_at on mavis_config not updating on upsert (cosmetic)",
   "[PARKED] Architecture diagram (Mermaid, layer-level) — build after first /build session",
   "[PARKED] Model routing logic — revisit once multiple AI features exist"
@@ -26,31 +26,6 @@ function detectBuildTrigger(message) {
   const rest = trimmed.slice("/build".length).trim();
   const filePaths = rest.length > 0 ? rest.split(/\s+/) : [];
   return { isBuild: true, filePaths };
-}
-
-async function fetchFileContent(filePath, githubToken, repo = "daver5326/Mavis", branch = "main") {
-  const url = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        Authorization: `token ${githubToken}`,
-        Accept: "application/vnd.github.v3+json"
-      }
-    });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      return { path: filePath, error: `Failed to fetch (${res.status})` };
-    }
-    const data = await res.json();
-    const content = Buffer.from(data.content.replace(/\n/g, ""), "base64").toString("utf-8");
-    return { path: filePath, content };
-  } catch (e) {
-    clearTimeout(timeout);
-    return { path: filePath, error: `Fetch failed: ${e.message}` };
-  }
 }
 
 async function fetchRecentBuildSessions(supabaseUrl, supabaseKey, limit = 10) {
@@ -69,7 +44,7 @@ async function fetchRecentBuildSessions(supabaseUrl, supabaseKey, limit = 10) {
 
 async function assembleBuildContext({ filePaths, githubToken, supabaseUrl, supabaseKey, ralphGlobals }) {
   const fileResults = await Promise.allSettled(
-    filePaths.map((p) => fetchFileContent(p, githubToken))
+    filePaths.map((p) => fetchFileFromGitHub(p))
   );
   const fileContents = fileResults.map((r) =>
     r.status === 'fulfilled' ? r.value : { path: 'unknown', error: r.reason?.message || 'Unknown error' }
@@ -183,7 +158,6 @@ function markBuildSession(session) {
 
 module.exports = {
   detectBuildTrigger,
-  fetchFileContent,
   fetchRecentBuildSessions,
   assembleBuildContext,
   buildModeSystemPrompt,
